@@ -36,6 +36,7 @@ async function setup(beforeOperations?: (db: PGlite) => Promise<void>) {
   await db.exec(sql('migrations/0005_operations.sql'))
   await db.exec(sql('migrations/0006_test_flag_notifications.sql'))
   await db.exec(sql('migrations/0007_daily_cleanup.sql'))
+  await db.exec(sql('migrations/0008_bulk_cancel.sql'))
   await db.exec(`
     insert into auth.users values ('${ADMIN_ID}', 'faruk@example.com'), ('${USER_ID}', 'x@example.com');
     insert into admin_users values ('${ADMIN_ID}');
@@ -857,6 +858,88 @@ describe('şema teşhis sorgusu (supabase/diagnostics/schema_check.sql)', () => 
     const before = (await db.query<{ n: number }>('select count(*)::int n from appointments')).rows[0].n
     await db.query(sql('diagnostics/schema_check.sql'))
     expect((await db.query<{ n: number }>('select count(*)::int n from appointments')).rows[0].n).toBe(before)
+  })
+})
+
+describe('toplu iptal (0008)', () => {
+  const idOf = async (code: string) =>
+    (await db.query<{ id: string }>('select id from appointments where reference_code=$1', [code])).rows[0].id
+  const bulk = async (ids: string[], reason: string | null) =>
+    (await db.query<{ r: any }>('select admin_bulk_cancel($1::uuid[], $2) r', [ids, reason])).rows[0].r
+
+  it('iptali, nedeni ve durum geçmişini veritabanına yazar; uygun olmayanları atlar', async () => {
+    const d = futureDate(3)
+    const a = await idOf((await book({ start: at(d, '15:00') })).reference_code)
+    const b = await idOf((await book({ start: at(d, '16:00'), phone: '0533 222 33 44' })).reference_code)
+    const c = await idOf((await book({ start: at(d, '17:00'), phone: '0533 222 33 45' })).reference_code)
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await db.query('select admin_set_appointment_status($1,$2)', [c, 'cancelled'])
+      const out = await bulk([a, b, c, a], '  Acil   hastane ziyareti ')
+      expect(out).toHaveLength(3) // tekrarlanan kimlik bir kez işlenir
+      expect(out.filter((r: any) => !r.ok)).toEqual([{ id: c, ok: false, code: 'already_cancelled' }])
+      expect(out.filter((r: any) => r.ok).map((r: any) => r.id).sort()).toEqual([a, b].sort())
+    })
+    const rows = (await db.query<any>(
+      'select id, status, cancelled_at, cancellation_reason, cancel_notice_opened_at from appointments where id = any($1::uuid[]) order by starts_at', [[a, b, c]],
+    )).rows
+    expect(rows.map((r: any) => [r.status, r.cancellation_reason])).toEqual([
+      ['cancelled', 'Acil hastane ziyareti'], ['cancelled', 'Acil hastane ziyareti'], ['cancelled', null],
+    ])
+    expect(rows.every((r: any) => r.cancelled_at && r.cancel_notice_opened_at === null)).toBe(true)
+    const hist = (await db.query<any>('select new_status from appointment_status_history where appointment_id=$1 order by id', [a])).rows
+    expect(hist.map((h: any) => h.new_status)).toEqual(['pending', 'cancelled'])
+    expect(await slotsOf(d)).toContain('15:00') // iptal edilen saat yeniden açılır
+  })
+
+  it('ikinci çalıştırma (ör. başka cihazdan) aynı randevuyu tekrar iptal etmez, nedeni değiştirmez', async () => {
+    const a = await idOf((await book({ start: at(futureDate(3), '15:00') })).reference_code)
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await bulk([a], 'İlk neden')
+      expect(await bulk([a], 'İkinci neden')).toEqual([{ id: a, ok: false, code: 'already_cancelled' }])
+    })
+    expect((await db.query<any>('select cancellation_reason from appointments where id=$1', [a])).rows[0].cancellation_reason).toBe('İlk neden')
+  })
+
+  it('neden zorunludur; tamamlanmış randevu iptal edilmez', async () => {
+    const a = await idOf((await book({ start: at(futureDate(3), '15:00') })).reference_code)
+    await db.query(`update appointments set status='completed' where id=$1`, [a])
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await expectError(bulk([a], '   '), 'reason_required')
+      await expectError(bulk([], 'x'), 'nothing_selected')
+      expect(await bulk([a], 'x')).toEqual([{ id: a, ok: false, code: 'invalid_transition' }])
+    })
+  })
+
+  it('"WhatsApp açıldı" işareti kalıcıdır ve ilk zaman korunur', async () => {
+    const a = await idOf((await book({ start: at(futureDate(3), '15:00') })).reference_code)
+    let first: string
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await bulk([a], 'Neden')
+      first = (await db.query<any>('select admin_mark_cancel_notice($1) v', [a])).rows[0].v
+      const again = (await db.query<any>('select admin_mark_cancel_notice($1) v', [a])).rows[0].v
+      expect(String(again)).toBe(String(first))
+    })
+    expect((await db.query<any>('select cancel_notice_opened_at from appointments where id=$1', [a])).rows[0].cancel_notice_opened_at).not.toBeNull()
+  })
+
+  it('yönetici olmayan ve anonim kullanıcı çağıramaz', async () => {
+    const a = await idOf((await book({ start: at(futureDate(3), '15:00') })).reference_code)
+    await asRole('authenticated', USER_ID, async () => {
+      await expectError(bulk([a], 'x'), 'forbidden')
+      await expectError(db.query('select admin_mark_cancel_notice($1)', [a]), 'forbidden')
+    })
+    await asRole('anon', null, async () => {
+      await expectError(bulk([a], 'x'), 'permission denied')
+      await expectError(db.query('select admin_mark_cancel_notice($1)', [a]), 'permission denied')
+    })
+    expect((await db.query<any>('select status from appointments where id=$1', [a])).rows[0].status).toBe('pending')
+  })
+
+  it('migration tekrar çalıştırılırsa veri bozulmaz', async () => {
+    const a = await idOf((await book({ start: at(futureDate(3), '15:00') })).reference_code)
+    await asRole('authenticated', ADMIN_ID, async () => { await bulk([a], 'Neden') })
+    await db.exec(sql('migrations/0008_bulk_cancel.sql'))
+    expect((await db.query<any>('select cancellation_reason from appointments where id=$1', [a])).rows[0].cancellation_reason).toBe('Neden')
   })
 })
 

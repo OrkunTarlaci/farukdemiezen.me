@@ -24,7 +24,10 @@ const MESSAGES: Record<string, string> = {
   session_expired: 'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
   forbidden: 'Bu işlem için yetkiniz yok.',
   already_cancelled: 'Bu randevu zaten iptal edilmiş.',
-  not_attempted: 'Önceki hata nedeniyle bu randevu denenmedi; durumu değişmedi.',
+  migration_required: 'Veritabanı güncellemesi eksik: supabase/migrations/0008_bulk_cancel.sql henüz uygulanmamış (README).',
+  reason_required: 'İptal nedenini yazın.',
+  reason_too_long: 'İptal nedeni en fazla 300 karakter olabilir.',
+  nothing_selected: 'İptal edilecek randevu seçilmedi.',
   not_found: 'Randevu bulunamadı.',
   invalid_credentials: 'E-posta veya parola hatalı.',
   captcha_required: 'Lütfen güvenlik doğrulamasını tamamlayın.',
@@ -60,6 +63,8 @@ export function toAppError(err: unknown): AppError {
   const msg = (e.message ?? '').trim()
 
   if (Object.prototype.hasOwnProperty.call(MESSAGES, msg)) return new AppError(msg)
+  // Fonksiyon (PGRST202) veya sütun (42703) bulunamadı: yeni bir migration canlıya uygulanmamış
+  if (e.code === 'PGRST202' || e.code === '42703') return new AppError('migration_required')
   if (e.status === 401 || /jwt|token.*expired|not authenticated/i.test(msg)) return new AppError('session_expired')
   if (e.code === '42501' || e.status === 403 || /permission denied|forbidden/i.test(msg)) return new AppError('forbidden')
   if (/failed to fetch|networkerror|network request failed|load failed|fetcherror/i.test(msg) || e.status === 0) {

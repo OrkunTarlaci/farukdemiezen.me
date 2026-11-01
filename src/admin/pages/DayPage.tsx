@@ -4,16 +4,14 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState, ErrorPanel, Spinner } from '../../components/ui/feedback'
 import { fetchAppointmentsForDay, fetchBlockedForDay, fetchSettings, fetchWorkingHours } from '../../lib/api'
 import { appointmentIssues, buildDaySchedule, type AppointmentIssue } from '../../lib/schedule'
-import { getSupabase } from '../../lib/supabase'
 import { addDays, formatDateLong, formatPrice, isoWeekday, isValidDateString } from '../../lib/time'
+import { useLiveAppointments } from '../../lib/useLiveAppointments'
 import { useIstanbulToday } from '../../lib/useToday'
 import { summarizeAppointments } from '../../lib/stats'
 import { useAsync } from '../../lib/useAsync'
 import { AppointmentDialog } from '../AppointmentDialog'
 import { PageHeader, StatCard } from '../AdminLayout'
 import { ScheduleList } from '../ScheduleList'
-
-const REFRESH_MS = 30_000
 
 /** Seçili günün randevuları: özet kartları, dikkat gerektirenler ve kronolojik çizelge. */
 export function DayPage() {
@@ -42,29 +40,7 @@ export function DayPage() {
   }, [])
 
   // Canlı güncelleme: Realtime + 30 sn yoklama + sekmeye dönünce yenileme
-  const reloadRef = useRef(day.reload)
-  reloadRef.current = day.reload
-  useEffect(() => {
-    const tick = () => { if (document.visibilityState === 'visible') reloadRef.current() }
-    const timer = setInterval(tick, REFRESH_MS)
-    document.addEventListener('visibilitychange', tick)
-    let cleanup: (() => void) | null = null
-    let cancelled = false
-    void getSupabase().then((supabase) => {
-      if (!supabase || cancelled) return
-      const channel = supabase
-        .channel('appointments-live')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => reloadRef.current())
-        .subscribe()
-      cleanup = () => { void supabase.removeChannel(channel) }
-    })
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', tick)
-      cleanup?.()
-    }
-  }, [])
+  useLiveAppointments(day.reload)
 
   const current = day.data && day.data.date === date ? day.data : undefined
   const wh = config.data?.workingHours.find((w) => w.weekday === isoWeekday(date))

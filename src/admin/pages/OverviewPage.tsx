@@ -10,6 +10,7 @@ import { addDays, dateOfInstant, formatDateLong, formatDateShort, formatPrice, t
 import { useIstanbulToday } from '../../lib/useToday'
 import type { AppointmentRow } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
+import { useLiveAppointments } from '../../lib/useLiveAppointments'
 import { AppointmentDialog } from '../AppointmentDialog'
 import { PageHeader, StatCard } from '../AdminLayout'
 import { StatusBadge, TestBadge } from '../StatusBadge'
@@ -46,6 +47,7 @@ export function OverviewPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Önceki günler her gece silindiği için bugünden başlanır.
   const data = useAsync(() => fetchAppointmentsInRange(today, addDays(today, UPCOMING_DAYS)), [today])
+  useLiveAppointments(data.reload) // başka cihazdaki değişiklikler (ör. telefondan iptal)
 
   const view = useMemo(() => {
     const list = data.data ?? []

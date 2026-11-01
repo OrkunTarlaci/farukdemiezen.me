@@ -9,6 +9,7 @@ import { addDays, dateOfInstant, formatDateShort, isoWeekday, timeOfInstant, tod
 import { useIstanbulToday } from '../../lib/useToday'
 import type { AppointmentRow } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
+import { useLiveAppointments } from '../../lib/useLiveAppointments'
 import { AppointmentDialog } from '../AppointmentDialog'
 import { PageHeader } from '../AdminLayout'
 import { StatusBadge, TestBadge } from '../StatusBadge'
@@ -27,6 +28,7 @@ export function WeekPage() {
     return { weekStart, appointments, blocked }
   }, [weekStart, weekEnd])
   const hours = useAsync(fetchWorkingHours, [])
+  useLiveAppointments(week.reload) // başka cihazdaki değişiklikler (ör. telefondan iptal)
 
   const current = week.data && week.data.weekStart === weekStart ? week.data : undefined
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))

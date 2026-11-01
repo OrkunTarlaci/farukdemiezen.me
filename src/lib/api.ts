@@ -240,27 +240,41 @@ export async function setAppointmentStatus(id: string, status: AdminStatusChange
 export interface BulkCancelResult { id: string; ok: boolean; code?: string }
 
 /**
- * Toplu iptal: her randevu ayrı ayrı, sırayla, mevcut admin_set_appointment_status ile iptal edilir.
- * Yetki, satır kilidi ve "zaten iptal edilmiş" denetimi sunucudadır; biri başarısız olsa da diğerleri
- * denenir ve her randevunun sonucu ayrı döner (yalnızca ok olanlar gerçekten bu işlemde iptal edildi).
- * Oturum düşerse kalanlar denenmez.
+ * Toplu iptal (0008): tek sunucu çağrısında, neden ile birlikte veritabanına yazılır. Yetki, satır kilidi
+ * ve "zaten iptal edilmiş" denetimi sunucudadır; uygun olmayan randevu atlanır, diğerleri iptal edilir.
+ * Yalnızca ok olanlar gerçekten bu işlemde iptal edildi.
  */
-export async function cancelAppointments(ids: string[]): Promise<BulkCancelResult[]> {
-  const out: BulkCancelResult[] = []
-  for (const [i, id] of ids.entries()) {
-    try {
-      await setAppointmentStatus(id, 'cancelled')
-      out.push({ id, ok: true })
-    } catch (e) {
-      const code = toAppError(e).code
-      out.push({ id, ok: false, code })
-      if (code === 'session_expired' || code === 'forbidden') {
-        for (const rest of ids.slice(i + 1)) out.push({ id: rest, ok: false, code: 'not_attempted' })
-        break
-      }
-    }
-  }
-  return out
+export async function cancelAppointments(ids: string[], reason: string): Promise<BulkCancelResult[]> {
+  const res = await (await client()).rpc('admin_bulk_cancel', { p_ids: ids, p_reason: reason })
+  return unwrap(res) as BulkCancelResult[]
+}
+
+/** İptal nedeniyle iptal edilmiş (toplu iptal) randevular ve WhatsApp bildirim durumu: her cihazda aynı kaynak. */
+export interface CancelNotice {
+  id: string
+  starts_at: string
+  customer_first_name: string
+  customer_last_name: string
+  customer_phone: string
+  cancellation_reason: string
+  cancel_notice_opened_at: string | null
+}
+
+export async function fetchCancelNotices(date: string): Promise<CancelNotice[]> {
+  const res = await (await client())
+    .from('appointments')
+    .select('id, starts_at, customer_first_name, customer_last_name, customer_phone, cancellation_reason, cancel_notice_opened_at')
+    .eq('status', 'cancelled')
+    .not('cancellation_reason', 'is', null)
+    .gte('starts_at', dayRange(date).start)
+    .lt('starts_at', dayRange(date).end)
+    .order('starts_at')
+  return unwrap(res) as CancelNotice[]
+}
+
+/** "WhatsApp sohbeti açıldı" işaretini veritabanına yazar (her cihazda görünür). */
+export async function markCancelNoticeOpened(id: string): Promise<void> {
+  unwrap(await (await client()).rpc('admin_mark_cancel_notice', { p_id: id }))
 }
 
 /** Yeniden planlama için uygun başlangıç anları: randevunun kendi süresiyle, kendisi hariç (ISO, UTC). */

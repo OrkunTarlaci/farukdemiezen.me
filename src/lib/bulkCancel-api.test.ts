@@ -1,41 +1,34 @@
-// Toplu iptal çağrısı: sunucunun (admin_set_appointment_status) yanıtları sahte istemciyle verilir.
+// Toplu iptal ve bildirim çağrıları: sunucu yanıtları sahte istemciyle verilir.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const rpc = vi.fn()
 vi.mock('./supabase', () => ({ getSupabase: async () => ({ rpc }) }))
 
-const { cancelAppointments } = await import('./api')
+const { cancelAppointments, markCancelNoticeOpened } = await import('./api')
 
 describe('toplu iptal (cancelAppointments)', () => {
   beforeEach(() => rpc.mockReset())
 
-  it('her randevu için mevcut yönetici iptal fonksiyonunu ayrı ayrı çağırır', async () => {
-    rpc.mockResolvedValue({ data: { status: 'cancelled' }, error: null })
-    const out = await cancelAppointments(['a', 'b'])
-    expect(rpc.mock.calls).toEqual([
-      ['admin_set_appointment_status', { p_id: 'a', p_status: 'cancelled' }],
-      ['admin_set_appointment_status', { p_id: 'b', p_status: 'cancelled' }],
-    ])
-    expect(out).toEqual([{ id: 'a', ok: true }, { id: 'b', ok: true }])
+  it('tek sunucu çağrısıyla, nedeni ile birlikte veritabanına yazar', async () => {
+    rpc.mockResolvedValue({ data: [{ id: 'a', ok: true }, { id: 'b', ok: false, code: 'already_cancelled' }], error: null })
+    const out = await cancelAppointments(['a', 'b'], 'Hastane')
+    expect(rpc.mock.calls).toEqual([['admin_bulk_cancel', { p_ids: ['a', 'b'], p_reason: 'Hastane' }]])
+    expect(out).toEqual([{ id: 'a', ok: true }, { id: 'b', ok: false, code: 'already_cancelled' }])
   })
 
-  it('zaten iptal edilmiş randevu başarılı sayılmaz (iki kez iptal ve mesaj yok); diğerleri devam eder', async () => {
-    rpc
-      .mockResolvedValueOnce({ data: null, error: { message: 'already_cancelled' } })
-      .mockResolvedValueOnce({ data: { status: 'cancelled' }, error: null })
-    expect(await cancelAppointments(['a', 'b'])).toEqual([
-      { id: 'a', ok: false, code: 'already_cancelled' },
-      { id: 'b', ok: true },
-    ])
+  it('yetki hatasını iletir (sunucu reddeder; hiçbir şey iptal edilmez)', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'forbidden', code: '42501' } })
+    await expect(cancelAppointments(['a'], 'x')).rejects.toMatchObject({ code: 'forbidden' })
   })
 
-  it('yetki veya oturum hatasında kalanları denemez', async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: { message: 'forbidden', code: '42501' } })
-    expect(await cancelAppointments(['a', 'b', 'c'])).toEqual([
-      { id: 'a', ok: false, code: 'forbidden' },
-      { id: 'b', ok: false, code: 'not_attempted' },
-      { id: 'c', ok: false, code: 'not_attempted' },
-    ])
-    expect(rpc).toHaveBeenCalledTimes(1)
+  it('0008 canlıya uygulanmamışsa anlaşılır bir hata verir', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'Could not find the function public.admin_bulk_cancel', code: 'PGRST202' } })
+    await expect(cancelAppointments(['a'], 'x')).rejects.toMatchObject({ code: 'migration_required' })
+  })
+
+  it('"WhatsApp açıldı" işaretini sunucuya yazar', async () => {
+    rpc.mockResolvedValue({ data: '2026-11-01T15:00:00Z', error: null })
+    await markCancelNoticeOpened('a')
+    expect(rpc).toHaveBeenCalledWith('admin_mark_cancel_notice', { p_id: 'a' })
   })
 })

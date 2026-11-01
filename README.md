@@ -39,6 +39,7 @@ npm run build            # üretim derlemesi (dist/)
    6. `supabase/migrations/0005_operations.sql` — "tamamlandı" / "gelmedi" durumları, randevu anındaki fiyat kaydı, yeniden planlama, işletme adı düzenleme, başlangıç fiyatları
    7. `supabase/migrations/0006_test_flag_notifications.sql` — test randevusu işareti (`is_test`), SMS bildirim kuyruğu (`notification_logs`), test randevusunu panelden silme
    8. `supabase/migrations/0007_daily_cleanup.sql` — her gece 00:00 (İstanbul) önceki günlerin randevularını silen günlük temizlik ve zamanlayıcısı (aşağıda "Günlük veri temizliği")
+   9. `supabase/migrations/0008_bulk_cancel.sql` — toplu iptal: iptal nedeni ve "WhatsApp açıldı" durumu randevu satırında saklanır, böylece her cihazda aynı görünür. Yalnızca sütun ve yönetici fonksiyonu ekler; tekrar çalıştırılması zararsızdır.
 
    > **0006, 0005'ten sonra bir kez çalıştırılır.** Tek transaction'dır, veri silmez. Uygulama kodu 0006'ya bağlıdır: çalıştırılmadan yönetim panelindeki randevu listeleri hata verir.
 
