@@ -19,3 +19,13 @@ export function corsHeaders(origin: string | null, allowed: string[]): Record<st
 export function originAllowed(origin: string | null, allowed: string[]): boolean {
   return allowed.length === 0 || (origin !== null && allowed.includes(origin))
 }
+
+/**
+ * Sunucu yapılandırması eksikken (ör. Supabase anahtarı yok) tüm isteklere verilen yanıt. Fonksiyonun
+ * çökmesi yerine tarayıcının okuyabileceği (CORS başlıklı) açık bir hata kodu döner.
+ */
+export function misconfiguredResponse(req: Request, allowed: string[], code: string): Response {
+  const cors = corsHeaders(req.headers.get('origin'), allowed)
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
+  return new Response(JSON.stringify({ error: code }), { status: 503, headers: { ...cors, 'Content-Type': 'application/json' } })
+}

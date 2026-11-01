@@ -32,6 +32,7 @@ const MESSAGES: Record<string, string> = {
   captcha_not_configured: 'Güvenlik doğrulaması yapılandırılmamış; şu anda online randevu alınamıyor. Lütfen telefonla iletişime geçin.',
   captcha_load_failed: 'Güvenlik doğrulaması yüklenemedi. Reklam/izleme engelleyiciyi kapatıp sayfayı yenileyin veya telefonla iletişime geçin.',
   dev_verification_only: 'Randevu kaydedilmedi: sunucu gerçek güvenlik doğrulaması (Turnstile) istiyor. Geçici görsel test yalnızca arayüzü denemek içindir.',
+  server_not_configured: 'Randevu servisi şu anda yapılandırma nedeniyle çalışmıyor. Lütfen işletmeyi telefonla arayın.',
   booking_service_unreachable: 'Randevu servisine şu anda ulaşılamıyor. Lütfen biraz sonra tekrar deneyin veya işletmeyi telefonla arayın.',
   not_test: 'Yalnızca test randevuları silinebilir.',
   notification_service_unreachable: 'SMS servisine ulaşılamadı. Randevu değişikliği kaydedildi; SMS durumu aşağıda görünür.',

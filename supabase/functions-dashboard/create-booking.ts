@@ -18,6 +18,37 @@ function corsHeaders(origin, allowed) {
     Vary: "Origin"
   };
 }
+function misconfiguredResponse(req, allowed, code) {
+  const cors = corsHeaders(req.headers.get("origin"), allowed);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  return new Response(JSON.stringify({ error: code }), { status: 503, headers: { ...cors, "Content-Type": "application/json" } });
+}
+
+// supabase/functions/_shared/keys.ts
+function fromJsonDict(raw) {
+  if (!raw) return null;
+  try {
+    const dict = JSON.parse(raw);
+    if (!dict || typeof dict !== "object") return null;
+    const preferred = dict.default;
+    if (typeof preferred === "string" && preferred.trim()) return preferred.trim();
+    const first = Object.values(dict).find((v) => typeof v === "string" && v.trim() !== "");
+    return first?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+function plain(raw) {
+  const v = raw?.trim();
+  return v ? v : null;
+}
+function resolveServerKey(env2) {
+  const fresh = fromJsonDict(env2("SUPABASE_SECRET_KEYS"));
+  if (fresh) return { key: fresh, source: "secret_keys" };
+  const legacy = plain(env2("SUPABASE_SERVICE_ROLE_KEY"));
+  if (legacy) return { key: legacy, source: "service_role" };
+  return null;
+}
 
 // supabase/functions/_shared/notifications.ts
 var TZ = "Europe/Istanbul";
@@ -94,18 +125,18 @@ function selectProvider(name) {
       return disabledProvider;
   }
 }
-function createNotificationDeps(admin2, provider) {
+function createNotificationDeps(admin, provider) {
   return {
     provider,
     claim: async (appointmentId) => {
-      const { data, error } = await admin2.rpc("claim_notifications", { p_appointment: appointmentId, p_limit: 20 });
+      const { data, error } = await admin.rpc("claim_notifications", { p_appointment: appointmentId, p_limit: 20 });
       if (error) throw new Error("claim_failed");
       return data ?? [];
     },
     load: async (appointmentId) => {
       const [{ data: a }, { data: s }] = await Promise.all([
-        admin2.from("appointments").select("customer_phone, service_name, starts_at, price_minor, reference_code, services(name)").eq("id", appointmentId).maybeSingle(),
-        admin2.from("business_settings").select("business_name, contact_phone").eq("id", 1).maybeSingle()
+        admin.from("appointments").select("customer_phone, service_name, starts_at, price_minor, reference_code, services(name)").eq("id", appointmentId).maybeSingle(),
+        admin.from("business_settings").select("business_name, contact_phone").eq("id", 1).maybeSingle()
       ]);
       if (!a) return null;
       const row = a;
@@ -122,7 +153,7 @@ function createNotificationDeps(admin2, provider) {
       };
     },
     finish: async (id, status, providerName, messageId, error) => {
-      await admin2.rpc("finish_notification", {
+      await admin.rpc("finish_notification", {
         p_id: id,
         p_status: status,
         p_provider: providerName,
@@ -175,8 +206,8 @@ function parseBookingRequest(body) {
     captchaToken: b.captchaToken
   };
 }
-async function verifyTurnstileWithCloudflare(secret2, token, remoteIp, fetchImpl = fetch) {
-  const form = new URLSearchParams({ secret: secret2, response: token });
+async function verifyTurnstileWithCloudflare(secret, token, remoteIp, fetchImpl = fetch) {
+  const form = new URLSearchParams({ secret, response: token });
   if (remoteIp) form.set("remoteip", remoteIp);
   const res = await fetchImpl("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
     method: "POST",
@@ -256,35 +287,43 @@ async function handleRequest(req, deps) {
 }
 
 // supabase/functions/create-booking/index.ts
-var secret = Deno.env.get("TURNSTILE_SECRET_KEY") ?? "";
-var admin = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", {
-  auth: { persistSession: false, autoRefreshToken: false }
-});
-var notificationDeps = createNotificationDeps(admin, selectProvider(Deno.env.get("SMS_PROVIDER")));
-var testHostnames = parseList(Deno.env.get("TEST_HOSTNAMES"));
-Deno.serve(
-  (req) => handleRequest(req, {
-    captchaConfigured: secret !== "",
-    verifyTurnstile: (token, ip) => verifyTurnstileWithCloudflare(secret, token, ip),
-    bookingRateLimitHit: async (ip) => {
-      const { data, error } = await admin.rpc("booking_rate_limit_hit", { p_client_ip: ip });
-      if (error) throw error;
-      return data === true;
-    },
-    createAppointment: async (args) => {
-      const { data, error } = await admin.rpc("create_appointment", args);
-      return { data, error: error ? { message: error.message } : null };
-    },
-    allowedOrigins: parseList(Deno.env.get("ALLOWED_ORIGINS")),
-    allowedHostnames: parseList(Deno.env.get("TURNSTILE_ALLOWED_HOSTNAMES")),
-    testHostnames: testHostnames.length ? testHostnames : DEFAULT_TEST_HOSTNAMES,
-    // SMS, yanıtı geciktirmemek için arka planda gönderilir; hatası randevuyu etkilemez.
-    afterBooking: async (appointmentId) => {
-      const job = processNotifications(notificationDeps, appointmentId).catch(() => void 0);
-      if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(job);
-      else await job;
-    },
-    // Kişisel veri içermez: yalnızca durum kodu ve hata kodu (Supabase → Edge Functions → Logs).
-    log: ({ status, code }) => console.log(JSON.stringify({ fn: "create-booking", status, code }))
-  })
-);
+var env = (name) => Deno.env.get(name);
+var url = env("SUPABASE_URL") ?? "";
+var serverKey = resolveServerKey(env);
+var allowedOrigins = parseList(env("ALLOWED_ORIGINS"));
+var log = (event) => console.log(JSON.stringify({ fn: "create-booking", ...event }));
+if (!url || !serverKey) {
+  log({ status: 503, code: "server_not_configured", hint: "SUPABASE_URL veya sunucu anahtarı (SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY) bulunamadı" });
+  Deno.serve((req) => misconfiguredResponse(req, allowedOrigins, "server_not_configured"));
+} else {
+  log({ status: 0, code: "started", key_source: serverKey.source });
+  const secret = env("TURNSTILE_SECRET_KEY") ?? "";
+  const admin = createClient(url, serverKey.key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const notificationDeps = createNotificationDeps(admin, selectProvider(env("SMS_PROVIDER")));
+  const testHostnames = parseList(env("TEST_HOSTNAMES"));
+  Deno.serve(
+    (req) => handleRequest(req, {
+      captchaConfigured: secret !== "",
+      verifyTurnstile: (token, ip) => verifyTurnstileWithCloudflare(secret, token, ip),
+      bookingRateLimitHit: async (ip) => {
+        const { data, error } = await admin.rpc("booking_rate_limit_hit", { p_client_ip: ip });
+        if (error) throw error;
+        return data === true;
+      },
+      createAppointment: async (args) => {
+        const { data, error } = await admin.rpc("create_appointment", args);
+        return { data, error: error ? { message: error.message } : null };
+      },
+      allowedOrigins,
+      allowedHostnames: parseList(env("TURNSTILE_ALLOWED_HOSTNAMES")),
+      testHostnames: testHostnames.length ? testHostnames : DEFAULT_TEST_HOSTNAMES,
+      // SMS, yanıtı geciktirmemek için arka planda gönderilir; hatası randevuyu etkilemez.
+      afterBooking: async (appointmentId) => {
+        const job = processNotifications(notificationDeps, appointmentId).catch(() => void 0);
+        if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(job);
+        else await job;
+      },
+      log: ({ status, code }) => log({ status, code })
+    })
+  );
+}

@@ -188,7 +188,7 @@ Cloudflare'in test anahtarları (`1x000…AA`) da kullanılabilir ama gizli test
 | `TEST_HOSTNAMES` | *(isteğe bağlı)* varsayılan `localhost,127.0.0.1` | Bu hostname'lerden gelen rezervasyonlar test sayılır |
 | `SMS_PROVIDER` | *(isteğe bağlı)* şimdilik `none` | Sağlayıcı seçilene kadar SMS gönderilmez; kuyrukta "Gönderilmedi" görünür |
 
-`SUPABASE_URL` ve `SUPABASE_SERVICE_ROLE_KEY` Supabase tarafından otomatik sağlanır; elle girmeyin.
+`SUPABASE_URL` ve Supabase anahtarları otomatik sağlanır; elle girmeyin. Fonksiyonlar önce yeni anahtar sistemini (`SUPABASE_SECRET_KEYS`, `SUPABASE_PUBLISHABLE_KEYS`), yoksa eski anahtarları (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`) kullanır; Supabase eski anahtarları kullanımdan kaldırsa da çalışmaya devam eder. Hiçbiri bulunamazsa fonksiyon `server_not_configured` hatası döner ve Logs'a nedenini yazar (anahtarın kendisi yazılmaz).
 
 ### Dağıtım — A) Supabase Dashboard ile (CLI gerekmez)
 

@@ -145,6 +145,8 @@ function logDevDiagnostics(fn: string, raw: unknown, mapped: AppError) {
   const hint =
     e?.name === 'FunctionsFetchError'
       ? `"${fn}" fonksiyonuna ulaşılamadı. En olası neden: fonksiyon Supabase'e dağıtılmamış (ön istek 404 döner ve tarayıcı bunu CORS hatası sayar). Diğer nedenler: ALLOWED_ORIGINS bu adresi içermiyor veya internet bağlantısı yok. README, bölüm 4.`
+      : mapped.code === 'server_not_configured'
+        ? 'Edge Function Supabase anahtarını bulamadı (SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY). Supabase → Edge Functions → Logs kaydına bakın.'
       : mapped.code === 'captcha_not_configured'
         ? 'TURNSTILE_SECRET_KEY Supabase Function Secrets içinde tanımlı değil.'
         : mapped.code === 'captcha_failed'

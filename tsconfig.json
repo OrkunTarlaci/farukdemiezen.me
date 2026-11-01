@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "vite.config.ts", "supabase/functions/create-booking/handler.ts", "supabase/functions/send-notifications/handler.ts", "supabase/functions/_shared/notifications.ts", "supabase/functions/_shared/http.ts"]
+  "include": ["src", "vite.config.ts", "supabase/functions/create-booking/handler.ts", "supabase/functions/send-notifications/handler.ts", "supabase/functions/_shared/notifications.ts", "supabase/functions/_shared/http.ts", "supabase/functions/_shared/keys.ts"]
 }
