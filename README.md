@@ -251,13 +251,13 @@ supabase functions deploy send-notifications --no-verify-jwt
    | `VITE_SUPABASE_URL` | Supabase Project URL | Genel değer |
    | `VITE_SUPABASE_ANON_KEY` | anon / publishable anahtar | Genel değer (RLS korur) |
    | `VITE_TURNSTILE_SITE_KEY` | Turnstile **Site Key** | Genel değer |
-   | `VITE_BASE_PATH` | *(isteğe bağlı)* | Boşsa `/<repo-adı>/` kullanılır |
+   | `VITE_BASE_PATH` | *(isteğe bağlı)* | Boşsa `/` kullanılır (özel alan adı kökü). Özel alan adı yoksa `/<repo-adı>/` yapın |
 
    Bu değerler derlenmiş JavaScript'e gömülür ve tarayıcıda herkes tarafından görülebilir; bu yüzden **gizli bilgi değildir**. GitHub'a hiçbir gizli değer (secret) girilmez; Turnstile gizli anahtarı ve service_role anahtarı yalnızca Supabase'te durur.
 4. `main` dalına her push'ta `.github/workflows/deploy.yml` önce bu üç değişkenin tanımlı olduğunu denetler (eksikse derleme durur, test anahtarı kullanılıyorsa uyarı verir), sonra testleri çalıştırır, siteyi derler ve yayınlar.
 5. Adresler: `https://<kullanici>.github.io/<repo-adı>/` ve yönetim paneli `https://<kullanici>.github.io/<repo-adı>/#/admin`.
 
-**Özel alan adı:** alan adını Pages ayarlarından bağlayın, `VITE_BASE_PATH` değişkenini `/` yapın ve aynı alan adını Turnstile hostname'ine, `ALLOWED_ORIGINS` ve `TURNSTILE_ALLOWED_HOSTNAMES` secret'larına ekleyin.
+**Özel alan adı:** site şu an `https://www.orkuntarlaci.me/` kökünde yayınlanıyor; varsayılan yol bu yüzden `/`. Alan adını değiştirirken Pages ayarlarından yenisini bağlayın ve aynı alan adını Turnstile hostname'ine, `ALLOWED_ORIGINS` ve `TURNSTILE_ALLOWED_HOSTNAMES` secret'larına ekleyin.
 
 ## 5b. Yönetim paneli (`/#/admin`)
 

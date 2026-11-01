@@ -29,8 +29,9 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
       VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY || secrets.VITE_TURNSTILE_SITE_KEY }}
-      # Proje sayfası için "/<depo-adı>/"; özel alan adı kullanılırsa VITE_BASE_PATH değişkenini "/" yapın.
-      VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || format('/{0}/', github.event.repository.name) }}
+      # Site özel alan adının kökünde yayınlanır (Settings → Pages → Custom domain), bu yüzden "/".
+      # Özel alan adı kaldırılırsa VITE_BASE_PATH değişkenini "/<depo-adı>/" yapın.
+      VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/' }}
     steps:
       - uses: actions/checkout@v5
 
