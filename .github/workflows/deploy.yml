@@ -1,0 +1,76 @@
+name: GitHub Pages'e Dağıt
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Yapılandırmayı denetle
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::VITE_SUPABASE_URL ve VITE_SUPABASE_ANON_KEY Actions değişkenleri tanımlı olmalı (README, bölüm 5)."
+            exit 1
+          fi
+          # Turnstile yoksa site yayınlanır ama müşteri randevu alamaz ("güvenlik doğrulaması yapılandırılmamış"
+          # mesajı görünür). Sunucu yine gerçek doğrulama ister; güvenlik gevşemez.
+          if [ -z "$VITE_TURNSTILE_SITE_KEY" ]; then
+            echo "::warning::VITE_TURNSTILE_SITE_KEY tanımlı değil: site açılır ama online randevu alınamaz (README, bölüm 3)."
+          fi
+          case "$VITE_TURNSTILE_SITE_KEY" in
+            1x000*|2x000*|3x000*) echo "::warning::VITE_TURNSTILE_SITE_KEY bir Cloudflare TEST anahtarı; üretimde gerçek site anahtarını kullanın." ;;
+          esac
+
+      - name: Testler
+        run: npm test
+
+      - name: Derle
+        run: npm run build
+        env:
+          # Bunlar GENEL değerlerdir ve derlenmiş JavaScript içinde görünür.
+          # Supabase anon/publishable anahtarı RLS ile korunduğu için burada olabilir.
+          # service_role anahtarını ASLA buraya koymayın.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+          # Proje sayfası için "/<repo-adı>/"; özel alan adı için "/" olmalıdır.
+          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || format('/{0}/', github.event.repository.name) }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
