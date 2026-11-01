@@ -9,7 +9,7 @@
 | 1 | **Veri sorumlusu bilgileri** `src/config/site.ts` → `privacy.dataController` (ad/unvan, adres, başvuru e-postası/telefonu) | ⬜ Boş | İşletme |
 | 2 | **Aydınlatma metni** (`src/components/site/PrivacyNotice.tsx`) hukukçu tarafından gözden geçirilmeli: hukuki sebepler (md. 5/2-c, 5/2-f), amaçlar, aktarım bölümü | ⬜ Taslak | Hukukçu |
 | 3 | **Yurt dışına aktarım (md. 9):** Supabase, Cloudflare, GitHub ve Google Fonts sunucuları yurt dışında olabilir. Hangi aktarım aracının (ör. standart sözleşme ve Kurul'a bildirim) gerektiği belirlenmeli | ⬜ Belirlenmedi | Hukukçu |
-| 4 | **Saklama süresi:** öneri 180 gün (aşağıda). Kabul edilen süre hem veritabanına hem `site.ts`'e yazılmalı | ⬜ Öneri | İşletme + hukukçu |
+| 4 | **Saklama süresi:** randevu gününü izleyen gece 00:00'da silme uygulandı (aşağıda). Hukuken uygunluğu (ör. vergi/fatura yükümlülükleri) teyit edilmeli | ⬜ Teyit bekliyor | İşletme + hukukçu |
 | 5 | **Otomatik silme işi** (pg_cron) kurulmalı (README, bölüm 2) | ⬜ Kurulmadı | Kurulumu yapan |
 | 6 | **VERBİS:** işletmenin kayıt yükümlülüğünden muaf olup olmadığı kontrol edilmeli | ⬜ Kontrol edilmedi | Hukukçu / mali müşavir |
 | 7 | **Veri işleyen sözleşmeleri:** Supabase ve Cloudflare'in veri işleme sözleşmeleri (DPA) incelenmeli | ⬜ İncelenmedi | İşletme |
@@ -20,7 +20,7 @@
 
 | Veri | Nerede | Neden | Ne kadar süre |
 |---|---|---|---|
-| Ad, soyad, cep telefonu | `appointments` | Randevu, iletişim | Saklama süresi (öneri 180 gün, randevu bitişinden itibaren) |
+| Ad, soyad, cep telefonu | `appointments` | Randevu, iletişim | Randevu gününü izleyen gece 00:00'a kadar (İstanbul) |
 | E-posta, not (isteğe bağlı) | `appointments` | İletişim, müşterinin talebi | Aynı |
 | Randevu durum geçmişi (kimin, ne zaman değiştirdiği) | `appointment_status_history` | Denetim izi | Randevuyla birlikte silinir (cascade) |
 | IP adresi | **Saklanmaz.** Yalnızca tuzlanmış SHA-256 özeti, `rate_limit_counters` | Hız sınırı / kötüye kullanımı önleme | En fazla ~1 gün |
@@ -37,18 +37,15 @@ Site çerez veya analitik aracı kullanmaz. Supabase oturumu yalnızca yönetici
 - **Saklama:** `notification_logs` telefon numarası veya mesaj metni içermez; randevu silinince bildirim kayıtları da silinir (cascade).
 - **Gönderen başlığı:** Türkiye'de SMS gönderen başlığı (ör. "FDEMIREZEN") sağlayıcı üzerinden onaylatılır; genellikle işletme belgeleri istenir.
 
-## 3. Saklama süresi (öneri)
+## 3. Saklama süresi (uygulanan kural)
 
-- **Öneri: randevu bitişinden itibaren 180 gün.** Gerekçe: olası itiraz/şikâyet ve tekrar randevu kolaylığı için makul bir süre. Bu süre **hukuki bir zorunluluğa dayanarak belirlenmemiştir**; vergi veya başka bir mevzuat daha uzun ya da daha kısa saklamayı gerektirebilir. Hukukçu ile teyit edin.
-- İptal edilen randevular da aynı kurala tabidir.
-- Uygulama: `public.purge_expired_customer_data()` süresi dolan randevuları ve geçmişlerini **kalıcı olarak siler**. Günlük çalıştırılmalıdır (pg_cron, README).
-- Süreyi değiştirmek:
-
-  ```sql
-  update public.private_settings set customer_data_retention_days = 180;
-  ```
-
-  Ardından `src/config/site.ts` → `privacy.retentionDays` değerini aynı sayıya ayarlayın (aydınlatma metninde görünür).
+- **Kural:** Randevu kaydı ve içindeki kişisel veriler (ad, soyad, telefon, e-posta, not) yalnızca randevu günü boyunca tutulur. Her gece **00:00 (Europe/Istanbul)**, başlangıcı o günden önce olan randevular kalıcı olarak silinir (`supabase/migrations/0007_daily_cleanup.sql`, `run_daily_cleanup`). İptal edilen, tamamlanan ve gelmeyen randevular da aynı kurala tabidir.
+- **Birlikte silinenler:** randevunun durum geçmişi (`appointment_status_history`) ve SMS kayıtları (`notification_logs`). Ayrıca 1 günden eski hız sınırı sayaçları (IP özetleri).
+- **Silinmeyenler:** hizmetler, fiyatlar, çalışma saatleri, kapalı dönemler, işletme ayarları, yönetici hesapları. Arşiv veya müşteri profili tutulmaz.
+- **Kayıt:** `maintenance_runs` yalnızca çalışma zamanı ve silinen sayıyı tutar (kişisel veri yok, 30 gün).
+- **Sonuç:** Geçmiş randevular, geçmiş ciro ve "tamamlandı/gelmedi" işaretleri ertesi gün kalmaz.
+- **Sınırlar:** Silinen veri Supabase yedeklerinde ve sağlayıcı günlüklerinde, o kopyaların saklama süresi dolana kadar kalabilir. Bu kural **hukuki bir değerlendirmeye dayanılarak belirlenmemiştir**; fatura/vergi veya uyuşmazlık nedeniyle daha uzun saklama gerekip gerekmediği hukukçuyla teyit edilmelidir.
+- **Zamanlayıcı:** pg_cron etkinleştirilmeden otomatik silme ÇALIŞMAZ; durum panelde Ayarlar → "Günlük veri temizliği" kartında görünür (README).
 
 ## 4. Silme ve diğer başvurular (md. 11)
 

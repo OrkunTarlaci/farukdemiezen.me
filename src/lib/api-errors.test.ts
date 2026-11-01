@@ -29,11 +29,13 @@ describe('Edge Function hata eşlemesi', () => {
 })
 
 describe('KVKK yapılandırması', () => {
-  it('aydınlatma metnindeki saklama süresi veritabanı varsayılanıyla aynıdır', () => {
-    const sql = readFileSync(new URL('../../supabase/migrations/0003_security.sql', import.meta.url), 'utf8')
-    const m = /customer_data_retention_days\s+integer not null default (\d+)/.exec(sql)
-    expect(m).not.toBeNull()
-    expect(siteConfig.privacy.retentionDays).toBe(Number(m![1]))
+  it('aydınlatma metnindeki saklama kuralı günlük temizlik migration dosyasıyla tutarlıdır', () => {
+    const sql = readFileSync(new URL('../../supabase/migrations/0007_daily_cleanup.sql', import.meta.url), 'utf8')
+    // Veritabanı: işletme gün başlangıcından önceki tüm randevular silinir
+    expect(sql).toMatch(/delete from public\.appointments where starts_at < v_cutoff/)
+    // Metin: aynı kuralı (gece 00:00'da silinme) söyler
+    expect(siteConfig.privacy.retentionText).toContain('00.00')
+    expect(siteConfig.privacy.retentionText).toContain('kalıcı biçimde silinir')
   })
 
   it('hukuki onay verilmeden metin onaylı işaretlenmemiştir', () => {

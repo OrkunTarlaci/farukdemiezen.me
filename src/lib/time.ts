@@ -68,6 +68,12 @@ export function dayRange(date: string): { start: string; end: string } {
   }
 }
 
+/** Istanbul'da bir sonraki gece yarısına kalan süre (ms). Gün devrinde ekranları yenilemek için. */
+export function msUntilNextIstanbulMidnight(now: Date = new Date()): number {
+  const next = zonedToInstant(addDays(todayIstanbul(now), 1), '00:00')
+  return Math.max(0, next.getTime() - now.getTime())
+}
+
 export function addDays(date: string, n: number): string {
   const [y, m, d] = date.split('-').map(Number)
   const t = new Date(Date.UTC(y, m - 1, d + n))

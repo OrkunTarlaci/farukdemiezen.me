@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addDays, dateOfInstant, dayRange, formatDateLong, formatDuration, formatPrice,
+  addDays, dateOfInstant, msUntilNextIstanbulMidnight, dayRange, formatDateLong, formatDuration, formatPrice,
   isoWeekday, isValidDateString, timeOfInstant, todayIstanbul, zonedToInstant,
 } from './time'
 
@@ -34,6 +34,17 @@ describe('Istanbul saat dilimi', () => {
     const t = zonedToInstant('2026-12-31', '23:30')
     expect(dateOfInstant(t)).toBe('2026-12-31')
     expect(timeOfInstant(t)).toBe('23:30')
+  })
+})
+
+describe('İstanbul gün devri', () => {
+  it('bir sonraki İstanbul gece yarısına kalan süreyi hesaplar (cihaz saat diliminden bağımsız)', () => {
+    // 1 Kasım 23:59:30 İstanbul = 20:59:30 UTC → 30 sn kaldı
+    expect(msUntilNextIstanbulMidnight(new Date('2026-11-01T20:59:30Z'))).toBe(30_000)
+    // tam gece yarısı: bir sonraki gün başına 24 saat
+    expect(msUntilNextIstanbulMidnight(new Date('2026-11-01T21:00:00Z'))).toBe(24 * 3600_000)
+    // UTC'de hâlâ 1 Kasım ama İstanbul'da 2 Kasım 01:00
+    expect(msUntilNextIstanbulMidnight(new Date('2026-11-01T22:00:00Z'))).toBe(23 * 3600_000)
   })
 })
 

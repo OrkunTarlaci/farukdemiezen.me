@@ -38,8 +38,10 @@ export const siteConfig = {
       email: null as string | null, // başvurular için
       phone: null as string | null,
     },
-    // Veritabanındaki private_settings.customer_data_retention_days ile AYNI tutulmalıdır.
-    retentionDays: 180,
+    // Saklama: randevular ve müşteri bilgileri, randevu gününü izleyen gece 00:00'da (İstanbul)
+    // silinir (supabase/migrations/0007_daily_cleanup.sql). Bu metin o davranışla aynı tutulmalıdır.
+    retentionText:
+      'Randevu kaydınız ve içindeki bilgiler (ad, soyad, telefon, e-posta, not) yalnızca randevu günü boyunca tutulur; randevu gününü izleyen gece saat 00.00’da (Türkiye saati) otomatik olarak kalıcı biçimde silinir. Silme talebinde bulunursanız kaydınız beklenmeden silinir.',
     summary:
       'Randevu için verdiğiniz ad, soyad, telefon ve (varsa) e-posta ile not bilgileri randevunuzu yönetmek için işlenir.',
   },

@@ -46,7 +46,8 @@ function sections(): { title: string; body: string[] }[] {
     {
       title: 'Saklama süresi',
       body: [
-        `Randevu kayıtları, randevu tarihinden itibaren ${p.retentionDays} gün sonra otomatik olarak kalıcı biçimde silinir. Silme talebinde bulunursanız kayıtlarınız bu süre beklenmeden silinir.`,
+        p.retentionText,
+        'Not: Veritabanından silinen veriler, hizmet sağlayıcının yedeklerinde ve sistem günlüklerinde sağlayıcının saklama süresi boyunca bir süre daha kalabilir.',
       ],
     },
     {

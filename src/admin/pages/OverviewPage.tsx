@@ -6,7 +6,8 @@ import { EmptyState, ErrorPanel, Spinner } from '../../components/ui/feedback'
 import { fetchAppointmentsInRange } from '../../lib/api'
 import { appointmentIssues } from '../../lib/schedule'
 import { summarizeAppointments } from '../../lib/stats'
-import { addDays, dateOfInstant, formatDateLong, formatDateShort, formatPrice, timeOfInstant, todayIstanbul } from '../../lib/time'
+import { addDays, dateOfInstant, formatDateLong, formatDateShort, formatPrice, timeOfInstant } from '../../lib/time'
+import { useIstanbulToday } from '../../lib/useToday'
 import type { AppointmentRow } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
 import { AppointmentDialog } from '../AppointmentDialog'
@@ -41,9 +42,10 @@ function Row({ a, onOpen, showDate }: { a: AppointmentRow; onOpen: () => void; s
 
 /** Bugünün özeti, sıradaki randevu, onay bekleyen talepler ve sonucu işaretlenmemiş randevular. */
 export function OverviewPage() {
-  const today = todayIstanbul()
+  const today = useIstanbulToday()
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const data = useAsync(() => fetchAppointmentsInRange(addDays(today, -7), addDays(today, UPCOMING_DAYS)), [today])
+  // Önceki günler her gece silindiği için bugünden başlanır.
+  const data = useAsync(() => fetchAppointmentsInRange(today, addDays(today, UPCOMING_DAYS)), [today])
 
   const view = useMemo(() => {
     const list = data.data ?? []
@@ -56,7 +58,7 @@ export function OverviewPage() {
       next: future[0] ?? null,
       pending: future.filter((a) => a.status === 'pending'),
       upcomingCount: future.length,
-      // Son 7 gün ve bugün: saati geçmiş ama sonucu işaretlenmemiş / hâlâ onay bekleyen
+      // Bugün: saati geçmiş ama sonucu işaretlenmemiş / hâlâ onay bekleyen (gece yarısı silinmeden önce)
       unresolved: list.filter((a) => appointmentIssues(a, undefined, []).some((i) => i === 'pending_past' || i === 'unresolved_past')),
     }
   }, [data.data, today])
@@ -125,7 +127,7 @@ export function OverviewPage() {
           {view.unresolved.length > 0 && (
             <section className="card mt-4 border-warning/40 p-5" aria-labelledby="sonuc">
               <h2 id="sonuc" className="flex items-center gap-2 text-sm text-warning">
-                <AlertTriangle className="h-4 w-4" aria-hidden /> Sonucu işaretlenmemiş randevular (son 7 gün)
+                <AlertTriangle className="h-4 w-4" aria-hidden /> Sonucu işaretlenmemiş randevular (bugün)
               </h2>
               <p className="mt-1 text-xs text-muted">Saati geçmiş ama hâlâ “onay bekliyor” veya “onaylandı” durumundakiler. Açıp “Tamamlandı” ya da “Gelmedi” olarak işaretleyin.</p>
               <ul className="-mx-3 mt-2">{view.unresolved.map((a) => <Row key={a.id} a={a} showDate onOpen={() => setSelectedId(a.id)} />)}</ul>

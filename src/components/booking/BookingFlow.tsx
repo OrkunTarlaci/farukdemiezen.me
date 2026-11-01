@@ -1,7 +1,8 @@
 import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock, Scissors } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchAvailableDates } from '../../lib/api'
-import { addDays, dateOfInstant, formatDateLong, formatDateShort, formatDuration, formatPrice, timeOfInstant, todayIstanbul } from '../../lib/time'
+import { addDays, dateOfInstant, formatDateLong, formatDateShort, formatDuration, formatPrice, timeOfInstant } from '../../lib/time'
+import { useIstanbulToday } from '../../lib/useToday'
 import type { SiteData } from '../../lib/siteData'
 import type { BookingResult, Service } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
@@ -102,7 +103,8 @@ export function BookingFlow({ site, preselect }: Props) {
   const [result, setResult] = useState<BookingResult>()
 
   const service = services.find((s) => s.id === serviceId)
-  const today = todayIstanbul()
+  // Takvimin sınırları için; kesin denetim (geçmiş saat, bildirim süresi) sunucu saatiyle yapılır.
+  const today = useIstanbulToday()
   const maxDate = addDays(today, settings.maximum_booking_horizon_days)
 
   // "Randevu Al" ile belirli bir hizmetten gelindiyse seçimi taşı

@@ -84,6 +84,10 @@ jobs:
           cp dist/index.html dist/404.html
           echo "Doğrulandı: $(grep -o "src=\"${VITE_BASE_PATH}assets/[^\"]*\"" dist/index.html)"
 
+      - name: Gizli anahtar taraması
+        # Yayınlanacak dosyalarda sb_secret_ anahtarı veya service_role JWT'si varsa yayın durdurulur.
+        run: node scripts/check-secrets.mjs dist
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v4

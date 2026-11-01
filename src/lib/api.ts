@@ -278,6 +278,26 @@ export async function fetchSmsStatus(): Promise<{ name: string; configured: bool
   return data.provider
 }
 
+export interface CleanupStatus {
+  /** scheduled: pg_cron işi etkin · inactive: iş var ama kapalı · not_scheduled: pg_cron var, iş yok · not_installed: pg_cron yok */
+  scheduler: 'scheduled' | 'inactive' | 'not_scheduled' | 'not_installed'
+  schedule: string | null
+  last_run_at: string | null
+  last_trigger: 'scheduler' | 'manual' | null
+  last_deleted_appointments: number | null
+  current_day_start: string
+}
+
+/** Yönetici: günlük temizliğin durumu (0007). Kişisel veri içermez. */
+export async function fetchCleanupStatus(): Promise<CleanupStatus> {
+  return unwrap(await (await client()).rpc('admin_cleanup_status')) as CleanupStatus
+}
+
+/** Yönetici: temizliği hemen çalıştırır; yalnızca bugünden önceki randevuları siler. */
+export async function runCleanupNow(): Promise<{ deleted_appointments: number }> {
+  return unwrap(await (await client()).rpc('admin_run_cleanup')) as { deleted_appointments: number }
+}
+
 /** Yönetici: yalnızca test randevusunu kalıcı olarak siler. */
 export async function deleteTestAppointment(id: string): Promise<void> {
   unwrap(await (await client()).rpc('admin_delete_test_appointment', { p_id: id }))

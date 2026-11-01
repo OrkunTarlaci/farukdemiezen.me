@@ -6,6 +6,7 @@ import { fetchAppointmentsInRange, fetchBlockedInRange, fetchWorkingHours } from
 import { summarizeWorkingHours } from '../../lib/hours'
 import { appointmentIssues, type AppointmentIssue } from '../../lib/schedule'
 import { addDays, dateOfInstant, formatDateShort, isoWeekday, timeOfInstant, todayIstanbul, WEEKDAY_SHORT } from '../../lib/time'
+import { useIstanbulToday } from '../../lib/useToday'
 import type { AppointmentRow } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
 import { AppointmentDialog } from '../AppointmentDialog'
@@ -19,7 +20,7 @@ export function WeekPage() {
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayIstanbul()))
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const weekEnd = addDays(weekStart, 6)
-  const today = todayIstanbul()
+  const today = useIstanbulToday()
 
   const week = useAsync(async () => {
     const [appointments, blocked] = await Promise.all([fetchAppointmentsInRange(weekStart, weekEnd), fetchBlockedInRange(weekStart, weekEnd)])

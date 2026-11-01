@@ -5,7 +5,8 @@ import { EmptyState, ErrorPanel, Spinner } from '../../components/ui/feedback'
 import { fetchAppointmentsForDay, fetchBlockedForDay, fetchSettings, fetchWorkingHours } from '../../lib/api'
 import { appointmentIssues, buildDaySchedule, type AppointmentIssue } from '../../lib/schedule'
 import { getSupabase } from '../../lib/supabase'
-import { addDays, formatDateLong, formatPrice, isoWeekday, isValidDateString, todayIstanbul } from '../../lib/time'
+import { addDays, formatDateLong, formatPrice, isoWeekday, isValidDateString } from '../../lib/time'
+import { useIstanbulToday } from '../../lib/useToday'
 import { summarizeAppointments } from '../../lib/stats'
 import { useAsync } from '../../lib/useAsync'
 import { AppointmentDialog } from '../AppointmentDialog'
@@ -16,8 +17,19 @@ const REFRESH_MS = 30_000
 
 /** Seçili günün randevuları: özet kartları, dikkat gerektirenler ve kronolojik çizelge. */
 export function DayPage() {
-  const [date, setDate] = useState(todayIstanbul())
+  const today = useIstanbulToday()
+  const [date, setDate] = useState(today)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // Gece yarısı: yönetici "bugün"ü görüyorsa ekran kendiliğinden yeni güne geçer. Başka bir gün
+  // seçilmişse seçim korunur. (Önceki günün randevuları sunucuda 00:00'da silinir.)
+  const prevToday = useRef(today)
+  useEffect(() => {
+    if (prevToday.current === today) return
+    setDate((d) => (d === prevToday.current ? today : d))
+    setSelectedId(null)
+    prevToday.current = today
+  }, [today])
 
   // Her yanıt kendi tarihini taşır: ekranda başlıktaki tarihle eşleşmeyen veri asla gösterilmez.
   const day = useAsync(async () => {
@@ -81,13 +93,15 @@ export function DayPage() {
   const attention = Object.keys(issuesById).length
 
   const selected = current?.appointments.find((a) => a.id === selectedId) ?? null
-  const today = todayIstanbul()
   const setValidDate = (d: string) => { if (isValidDateString(d)) { setDate(d); setSelectedId(null) } }
   const expired = day.error?.code === 'session_expired'
 
   return (
     <div>
-      <PageHeader title="Günlük Randevular" description="Seçili günün çizelgesi. Bir randevuya dokunarak onaylayın, taşıyın veya sonucunu işaretleyin." />
+      <PageHeader
+        title="Günlük Randevular"
+        description={<>İşletme günü (İstanbul): <strong className="text-fg">{formatDateLong(today)}</strong>. Önceki günlerin randevuları her gece 00:00'da silinir.</>}
+      />
 
       <div className="card mb-5 flex flex-wrap items-center gap-2 p-2" role="group" aria-label="Gün seçimi">
         <Button variant="ghost" onClick={() => setValidDate(addDays(date, -1))} aria-label="Önceki gün" icon={<ChevronLeft className="h-4 w-4" aria-hidden />} />

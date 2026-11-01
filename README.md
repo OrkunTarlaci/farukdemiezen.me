@@ -38,6 +38,7 @@ npm run build            # üretim derlemesi (dist/)
    5. `supabase/seed.sql` — başlangıç hizmetleri (700 / 500 / 900 TL) ve **geçici** çalışma saatleri; tekrar çalıştırılırsa hizmet çoğalmaz
    6. `supabase/migrations/0005_operations.sql` — "tamamlandı" / "gelmedi" durumları, randevu anındaki fiyat kaydı, yeniden planlama, işletme adı düzenleme, başlangıç fiyatları
    7. `supabase/migrations/0006_test_flag_notifications.sql` — test randevusu işareti (`is_test`), SMS bildirim kuyruğu (`notification_logs`), test randevusunu panelden silme
+   8. `supabase/migrations/0007_daily_cleanup.sql` — her gece 00:00 (İstanbul) önceki günlerin randevularını silen günlük temizlik ve zamanlayıcısı (aşağıda "Günlük veri temizliği")
 
    > **0006, 0005'ten sonra bir kez çalıştırılır.** Tek transaction'dır, veri silmez. Uygulama kodu 0006'ya bağlıdır: çalıştırılmadan yönetim panelindeki randevu listeleri hata verir.
 
@@ -116,15 +117,31 @@ Varsayılanlar `private_settings` tablosundadır (istemciye kapalı):
 update public.private_settings set public_queries_per_ip_per_minute = 90;
 ```
 
-### KVKK: otomatik silme (pg_cron)
+### Günlük veri temizliği (0007)
 
-Saklama süresi dolan randevular `public.purge_expired_customer_data()` ile silinir. Günlük çalıştırmak için **Database → Extensions** bölümünden `pg_cron`'u etkinleştirin ve SQL Editor'de:
+Randevular ve içindeki müşteri bilgileri (ad, soyad, telefon, e-posta, not) **yalnızca randevu günü boyunca** tutulur. Her gece **00:00'da (Europe/Istanbul)**, başlangıcı o günden önce olan tüm randevular kalıcı olarak silinir; bağlı durum geçmişi ve SMS kayıtları da birlikte silinir (cascade). Arşiv tutulmaz.
 
-```sql
-select cron.schedule('kvkk-purge', '30 3 * * *', $$select public.purge_expired_customer_data()$$);
-```
+- **Silinmeyenler:** bugünün ve sonraki günlerin randevuları, hizmetler, fiyatlar, çalışma saatleri, kapalı dönemler, işletme ayarları, yönetici hesapları.
+- **Nasıl çalışır:** `public.run_daily_cleanup()` (yalnızca veritabanı sahibi çağırabilir) işletme gününün başlangıcını `business_settings.timezone` ile hesaplar ve ondan önceki randevuları siler. pg_cron her saat başı çalıştırır; yalnızca 00:00 İstanbul çalışması bir şey siler, diğerleri hiçbir şey yapmaz. Zamanlayıcı bir gün çalışmazsa sonraki çalışma kaçırılan günleri de siler. Fonksiyon tekrar çalıştırılmaya karşı güvenlidir ve rezervasyonla aynı kilidi kullanır.
+- **Kayıt:** Her çalışma `maintenance_runs` tablosuna yalnızca zaman, kesim anı ve silinen sayıyı yazar (kişisel veri yok; 30 gün tutulur). Postgres günlüğüne de yalnızca sayılar yazılır.
+- **Panel:** Ayarlar → "Günlük veri temizliği" kartı zamanlayıcının kurulu olup olmadığını ve son çalışmayı gösterir; "Şimdi çalıştır" ile elle tetiklenebilir (onay sorulur).
 
-Saklama süresi ve silme talepleri için bkz. **[docs/KVKK.md](docs/KVKK.md)**.
+**Zamanlayıcıyı kurma (bir kez):**
+
+1. Supabase → **Database → Extensions** (veya **Integrations → Cron**) → `pg_cron`'u etkinleştirin.
+2. `0007_daily_cleanup.sql` dosyasını SQL Editor'de çalıştırın. pg_cron etkinse iş kendiliğinden oluşturulur. 0007'yi pg_cron'dan önce çalıştırdıysanız işi şu komutla oluşturun (tekrar çalıştırılması güvenlidir, aynı adlı işi günceller):
+
+   ```sql
+   select cron.schedule('daily-appointment-cleanup', '0 * * * *', 'select public.run_daily_cleanup()');
+   ```
+
+3. Doğrulama: `select jobname, schedule, active from cron.job;` sorgusunda `daily-appointment-cleanup` görünmeli; panelde Ayarlar → "Günlük veri temizliği" kartı yeşil olmalı (ilk saat başından sonra "son çalışma" dolar).
+
+**Yedekler ve günlükler:** Veritabanından silinen veriler, Supabase'in yedeklerinde (plana göre; ör. ücretli planlarda günlük yedekler belirli bir süre tutulur) ve sağlayıcı günlüklerinde o sürelerin sonuna kadar kalabilir. Silme bu kopyaları hemen yok etmez; güncel süreleri Supabase planınızın belgelerinden doğrulayın.
+
+Eski `purge_expired_customer_data()` (gün sayısına göre silme) yerinde durur ama artık gerekmez; daha önce `kvkk-purge` adıyla zamanladıysanız kalabilir, zararı yoktur.
+
+Silme talepleri için bkz. **[docs/KVKK.md](docs/KVKK.md)**.
 
 ## 3. Cloudflare Turnstile kurulumu
 
@@ -314,7 +331,7 @@ Randevu talebi alındığında, onaylandığında, iptal edildiğinde ve yeniden
 | Giriş yapmış ama yönetici olmayan | Anon ile aynı. Randevuları göremez. |
 | Yönetici | Randevuları, bloklu dönemleri ve durum geçmişini okur; `admin_set_appointment_status` ile onaylar/iptal eder; hizmet, çalışma saati, kapalı dönem ve ayarları düzenler (0004). |
 | Edge Function (service_role) | Yalnızca `booking_rate_limit_hit` ve `create_appointment`'ı çağırır. |
-| SQL Editor / pg_cron (veritabanı sahibi) | KVKK silme fonksiyonları (`purge_expired_customer_data`, `delete_customer_data`). |
+| SQL Editor / pg_cron (veritabanı sahibi) | Günlük temizlik (`run_daily_cleanup`) ve KVKK silme fonksiyonları (`delete_customer_data`, eski `purge_expired_customer_data`). Yönetici panelden yalnızca `admin_run_cleanup()` ile bugünden öncesini silebilir. |
 
 - Tüm tablolarda RLS açıktır; istemci rollerinin tablo yetkileri önce tamamen kaldırılır, sonra yalnızca gerekenler verilir. `private_settings` ve `rate_limit_counters` istemciye tamamen kapalıdır.
 - Yazma yolları: `create_appointment` (yalnızca service_role, kendi içinde doğrulama yapar), `admin_set_appointment_status` (içeride `is_admin()` denetler), hız sayacı (yalnızca güvenli fonksiyonların içinden) ve 0004 ile gelen yönetici yazmaları.

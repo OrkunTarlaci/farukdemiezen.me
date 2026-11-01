@@ -39,7 +39,11 @@ with checks(migration, kontrol, ok, ayrinti) as (
   ('0006', 'notification_logs tablosu',      to_regclass('public.notification_logs') is not null, null),
   ('0006', 'claim_notifications',            to_regprocedure('public.claim_notifications(uuid,integer)') is not null, null),
   ('0006', 'create_appointment (8 param.)',  to_regprocedure('public.create_appointment(uuid,timestamptz,text,text,text,text,text,boolean)') is not null, null),
-  ('0006', 'eski create_appointment yok',    to_regprocedure('public.create_appointment(uuid,timestamptz,text,text,text,text,text)') is null, null)
+  ('0006', 'eski create_appointment yok',    to_regprocedure('public.create_appointment(uuid,timestamptz,text,text,text,text,text)') is null, null),
+  -- 0007
+  ('0007', 'maintenance_runs tablosu',       to_regclass('public.maintenance_runs') is not null, null),
+  ('0007', 'run_daily_cleanup fonksiyonu',   to_regprocedure('public.run_daily_cleanup(timestamptz,text)') is not null, null),
+  ('0007', 'pg_cron eklentisi etkin',        exists (select 1 from pg_extension where extname = 'pg_cron'), null)
 ),
 security(migration, kontrol, ok, ayrinti) as (
   -- Güvenlik: tarayıcı rolleri rezervasyonu doğrudan yapamamalı, müşteri verisini okuyamamalı.

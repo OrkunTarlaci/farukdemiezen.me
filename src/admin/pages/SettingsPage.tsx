@@ -4,7 +4,8 @@ import { useForm } from 'react-hook-form'
 import { Button } from '../../components/ui/Button'
 import { ErrorPanel, Spinner, SuccessNote } from '../../components/ui/feedback'
 import { Field, inputClass } from '../../components/ui/Field'
-import { fetchAdminSettings, fetchSmsStatus, updateSettings } from '../../lib/api'
+import { fetchAdminSettings, fetchCleanupStatus, fetchSmsStatus, runCleanupNow, updateSettings } from '../../lib/api'
+import { describeCleanup } from '../../lib/cleanup'
 import { settingsSchema, type SettingsFormValues } from '../../lib/adminValidation'
 import { toAppError } from '../../lib/errors'
 import type { AdminSettings } from '../../lib/types'
@@ -115,6 +116,54 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
   )
 }
 
+function CleanupCard() {
+  const status = useAsync(fetchCleanupStatus, [])
+  const [confirming, setConfirming] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const d = status.data ? describeCleanup(status.data) : null
+
+  async function run() {
+    setRunning(true); setError(null); setResult(null)
+    try {
+      const r = await runCleanupNow()
+      setResult(`Temizlik çalıştı: ${r.deleted_appointments} eski randevu silindi.`)
+      setConfirming(false)
+      status.reload()
+    } catch (e) {
+      setError(toAppError(e).message)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <section className="card mb-6 p-5 text-sm" aria-labelledby="temizlik">
+      <h2 id="temizlik" className="text-base">Günlük veri temizliği</h2>
+      <p className="mt-1 text-xs text-muted">Randevular ve içindeki müşteri bilgileri (ad, telefon, e-posta, not) yalnızca randevu günü boyunca tutulur. Hizmetler, fiyatlar, çalışma saatleri ve ayarlar silinmez.</p>
+      {status.loading && <Spinner label="Durum kontrol ediliyor…" />}
+      {status.error && <div className="mt-2"><ErrorPanel message={status.error.message} onRetry={status.reload} /></div>}
+      {d && <p role="status" className={`mt-3 ${d.ok ? 'text-success' : 'text-warning'}`}>{d.text}</p>}
+      <div aria-live="polite" className="mt-3 space-y-2 empty:hidden">
+        {result && <SuccessNote>{result}</SuccessNote>}
+        {error && <ErrorPanel message={error} />}
+      </div>
+      {!confirming ? (
+        <Button variant="secondary" size="sm" className="mt-3" onClick={() => setConfirming(true)}>Şimdi çalıştır</Button>
+      ) : (
+        <div role="alertdialog" aria-label="Temizlik onayı" className="mt-3 rounded-lg border border-danger/40 bg-danger/[0.08] p-3">
+          <p>Bugünden önceki tüm randevular ve müşteri bilgileri kalıcı olarak silinecek. Bugünün ve sonraki günlerin randevuları korunur. Devam edilsin mi?</p>
+          <div className="mt-2 flex gap-2">
+            <Button variant="danger" size="sm" loading={running} onClick={run}>Evet, çalıştır</Button>
+            <Button variant="ghost" size="sm" disabled={running} onClick={() => setConfirming(false)}>Vazgeç</Button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 /** SMS sağlayıcısının durumu. Anahtar veya gizli değer gösterilmez; yalnızca yapılandırılmış olup olmadığı. */
 function SmsStatusCard() {
   const status = useAsync(fetchSmsStatus, [])
@@ -141,6 +190,7 @@ export function SettingsPage() {
   return (
     <div>
       <PageHeader title="Ayarlar" description="Değişiklikler kaydedildiği anda müşteri sitesine yansır." />
+      <CleanupCard />
       <SmsStatusCard />
       {settings.loading && <Spinner label="Ayarlar yükleniyor…" />}
       {settings.error && <ErrorPanel message={settings.error.message} onRetry={settings.reload} />}

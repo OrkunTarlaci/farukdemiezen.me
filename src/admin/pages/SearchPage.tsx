@@ -14,13 +14,13 @@ import { STATUS_LABELS, StatusBadge, TestBadge } from '../StatusBadge'
 const PRESETS: { label: string; range: (today: string) => [string, string] }[] = [
   { label: 'Bugün', range: (t) => [t, t] },
   { label: 'Yaklaşan (30 gün)', range: (t) => [t, addDays(t, 30)] },
-  { label: 'Geçmiş (30 gün)', range: (t) => [addDays(t, -30), addDays(t, -1)] },
-  { label: 'Geçmiş (90 gün)', range: (t) => [addDays(t, -90), addDays(t, -1)] },
+  { label: 'Yarın', range: (t) => [addDays(t, 1), addDays(t, 1)] },
+  { label: 'Önümüzdeki 7 gün', range: (t) => [t, addDays(t, 7)] },
 ]
 
 export function SearchPage() {
   const today = todayIstanbul()
-  const [from, setFrom] = useState(addDays(today, -7))
+  const [from, setFrom] = useState(today)
   const [to, setTo] = useState(addDays(today, 30))
   const [status, setStatus] = useState<'' | AppointmentStatus>('')
   const [serviceId, setServiceId] = useState('')
@@ -44,7 +44,7 @@ export function SearchPage() {
 
   return (
     <div>
-      <PageHeader title="Ara ve Filtrele" description="Bugünkü, yaklaşan ve geçmiş randevuları tarih, durum ve hizmete göre bulun." />
+      <PageHeader title="Ara ve Filtrele" description="Bugünkü ve yaklaşan randevuları tarih, durum ve hizmete göre bulun. Önceki günlerin randevuları her gece 00:00'da silindiği için geçmiş kayıt bulunmaz." />
 
       <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Hazır aralıklar">
         {PRESETS.map((p) => {

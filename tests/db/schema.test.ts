@@ -35,6 +35,7 @@ async function setup(beforeOperations?: (db: PGlite) => Promise<void>) {
   if (beforeOperations) await beforeOperations(db)
   await db.exec(sql('migrations/0005_operations.sql'))
   await db.exec(sql('migrations/0006_test_flag_notifications.sql'))
+  await db.exec(sql('migrations/0007_daily_cleanup.sql'))
   await db.exec(`
     insert into auth.users values ('${ADMIN_ID}', 'faruk@example.com'), ('${USER_ID}', 'x@example.com');
     insert into admin_users values ('${ADMIN_ID}');
@@ -849,12 +850,147 @@ describe('şema teşhis sorgusu (supabase/diagnostics/schema_check.sql)', () => 
     const rows = (await db.query<{ migration: string; kontrol: string; durum: string }>(sql('diagnostics/schema_check.sql'))).rows
     expect(rows.length).toBeGreaterThan(25)
     const missing = rows.filter((r) => r.durum !== 'TAMAM').map((r) => `${r.migration}: ${r.kontrol}`)
-    expect(missing).toEqual(['0002: appointments Realtime yayınında'])
+    expect(missing).toEqual(['0002: appointments Realtime yayınında', '0007: pg_cron eklentisi etkin'])
   })
 
   it('veritabanında hiçbir şeyi değiştirmez', async () => {
     const before = (await db.query<{ n: number }>('select count(*)::int n from appointments')).rows[0].n
     await db.query(sql('diagnostics/schema_check.sql'))
     expect((await db.query<{ n: number }>('select count(*)::int n from appointments')).rows[0].n).toBe(before)
+  })
+})
+
+describe('günlük randevu temizliği (0007)', () => {
+  // Sabit "şimdi": 15 Haziran 2030 09:00 İstanbul. Testler gerçek saatten bağımsızdır.
+  const NOW = '2030-06-15T09:00:00+03:00'
+  const insertAt = async (code: string, start: string, minutes = 30, phone = '+905321112233') => {
+    const end = new Date(new Date(start).getTime() + minutes * 60000).toISOString()
+    return (await db.query<{ id: string }>(
+      `insert into appointments (reference_code, service_id, service_name, price_minor, customer_first_name, customer_last_name, customer_phone, starts_at, ends_at)
+       values ($1, $2, 'Saç Kesimi', 70000, 'Ad', 'Soyad', $3, $4, $5) returning id`,
+      [code, serviceIds['Saç Kesimi'], phone, start, end],
+    )).rows[0].id
+  }
+  const codes = async () => (await db.query<{ reference_code: string }>('select reference_code from appointments order by starts_at')).rows.map((r) => r.reference_code)
+  const cleanup = async (now = NOW) => (await db.query<{ r: any }>(`select run_daily_cleanup($1, 'scheduler') r`, [now])).rows[0].r
+
+  it('önceki İstanbul gününü siler; bugünü (00:00 dahil) ve geleceği korur', async () => {
+    await insertAt('FD-OLD003', '2030-06-12T15:00:00+03:00')
+    await insertAt('FD-YEST01', '2030-06-14T15:00:00+03:00')
+    await insertAt('FD-YEST02', '2030-06-14T23:30:00+03:00') // gece yarısına taşan dünkü randevu
+    await insertAt('FD-TODAY0', '2030-06-15T00:00:00+03:00') // tam sınır: bugün
+    await insertAt('FD-TODAY1', '2030-06-15T08:00:00+03:00') // bugün, saati geçmiş ama bugün
+    await insertAt('FD-TODAY2', '2030-06-15T18:00:00+03:00')
+    await insertAt('FD-TOMORR', '2030-06-16T10:00:00+03:00')
+    const r = await cleanup()
+    expect(r.deleted_appointments).toBe(3)
+    expect(new Date(r.cutoff).toISOString()).toBe('2030-06-14T21:00:00.000Z') // 15 Haziran 00:00 İstanbul
+    expect(await codes()).toEqual(['FD-TODAY0', 'FD-TODAY1', 'FD-TODAY2', 'FD-TOMORR'])
+  })
+
+  it('yalnızca silinen randevunun durum geçmişini ve SMS kayıtlarını siler; kalanlarınkine dokunmaz', async () => {
+    const old = await insertAt('FD-YEST01', '2030-06-14T15:00:00+03:00')
+    const keep = await insertAt('FD-TOMORR', '2030-06-16T10:00:00+03:00', 30, '+905339998877')
+    await db.query(`insert into notification_logs (appointment_id, kind, dedupe_key) values ($1::uuid,'booking_received',$1::uuid::text || ':b'), ($2::uuid,'booking_received',$2::uuid::text || ':b')`, [old, keep])
+    await cleanup()
+    const hist = (await db.query<{ appointment_id: string }>('select distinct appointment_id from appointment_status_history')).rows.map((r) => r.appointment_id)
+    const logs = (await db.query<{ appointment_id: string }>('select appointment_id from notification_logs')).rows.map((r) => r.appointment_id)
+    expect(hist).toEqual([keep])
+    expect(logs).toEqual([keep])
+  })
+
+  it('kalıcı işletme verilerini korur ve tekrar çalıştırılması güvenlidir', async () => {
+    await db.query(`insert into blocked_periods (starts_at, ends_at, reason) values ('2030-06-01T00:00:00+03:00','2030-06-02T00:00:00+03:00','Geçmiş izin')`)
+    const count = async () => (await db.query<{ s: number; w: number; b: number; bp: number; a: number }>(
+      `select (select count(*)::int from services) s, (select count(*)::int from working_hours) w,
+              (select count(*)::int from business_settings) b, (select count(*)::int from blocked_periods) bp,
+              (select count(*)::int from admin_users) a`)).rows[0]
+    const before = await count()
+    await insertAt('FD-YEST01', '2030-06-14T15:00:00+03:00')
+    expect((await cleanup()).deleted_appointments).toBe(1)
+    expect((await cleanup()).deleted_appointments).toBe(0) // tekrar: hiçbir şey silinmez
+    expect(await count()).toEqual(before)
+    const runs = (await db.query<{ trigger: string; deleted_appointments: number }>('select trigger, deleted_appointments from maintenance_runs order by id')).rows
+    expect(runs).toEqual([{ trigger: 'scheduler', deleted_appointments: 1 }, { trigger: 'scheduler', deleted_appointments: 0 }])
+  })
+
+  it('gün sınırını saat dilimine göre hesaplar (İstanbul ve yaz saati uygulayan bir bölge)', async () => {
+    const start = async (at: string) => new Date((await db.query<{ s: string }>('select business_day_start($1) s', [at])).rows[0].s).toISOString()
+    expect(await start('2026-11-01T20:59:00Z')).toBe('2026-10-31T21:00:00.000Z') // 1 Kasım 23:59 İstanbul
+    expect(await start('2026-11-01T21:00:00Z')).toBe('2026-11-01T21:00:00.000Z') // 2 Kasım 00:00 İstanbul
+    await db.exec(`update business_settings set timezone = 'Europe/Berlin'`)
+    expect(await start('2026-03-29T10:00:00Z')).toBe('2026-03-28T23:00:00.000Z') // yaz saatine geçiş günü (CET 00:00)
+    expect(await start('2026-10-25T12:00:00Z')).toBe('2026-10-24T22:00:00.000Z') // yaz saatinden çıkış günü (CEST 00:00)
+  })
+
+  it('eksik yapılandırmayı ve geçersiz tetikleyiciyi açıkça bildirir; zamanlayıcı durumunu raporlar', async () => {
+    await expectError(db.query(`select run_daily_cleanup(now(), 'cron?')`), 'invalid_trigger')
+    await asRole('authenticated', ADMIN_ID, async () => {
+      const s = (await db.query<{ s: any }>('select admin_cleanup_status() s')).rows[0].s
+      expect(s.scheduler).toBe('not_installed') // PGlite'ta pg_cron yok
+      expect(s.last_run_at).toBeNull()
+    })
+    await db.exec('delete from business_settings')
+    await expectError(cleanup(), 'not_configured')
+  })
+
+  it('yalnızca yönetici elle çalıştırabilir ve durumu görebilir; istemciler temizlik fonksiyonuna ve kayıtlarına erişemez', async () => {
+    await asRole('authenticated', ADMIN_ID, async () => {
+      const r = (await db.query<{ r: any }>('select admin_run_cleanup() r')).rows[0].r
+      expect(r.deleted_appointments).toBe(0)
+      const s = (await db.query<{ s: any }>('select admin_cleanup_status() s')).rows[0].s
+      expect(s.last_trigger).toBe('manual')
+      await expectError(db.query(`select run_daily_cleanup()`), 'permission denied')
+      await expectError(db.query('select * from maintenance_runs'), 'permission denied')
+    })
+    await asRole('authenticated', USER_ID, async () => {
+      await expectError(db.query('select admin_run_cleanup()'), 'forbidden')
+      await expectError(db.query('select admin_cleanup_status()'), 'forbidden')
+    })
+    await asRole('anon', null, async () => {
+      await expectError(db.query('select admin_run_cleanup()'), 'permission denied')
+      await expectError(db.query(`select run_daily_cleanup()`), 'permission denied')
+      await expectError(db.query(`select business_day_start(now())`), 'permission denied')
+      await expectError(db.query(`delete from appointments`), 'permission denied')
+      await expectError(db.query(`update appointments set status = 'cancelled'`), 'permission denied')
+    })
+  })
+})
+
+describe('aynı gün randevu (gerçek sunucu saatiyle)', () => {
+  // Bugünü 00:00–23:55 açık, 5 dk aralıklı ve bildirim süresiz yapar; gerçek now() ile denenir.
+  async function openToday() {
+    const ist = new Date(Date.now() + 3 * 3600_000) // Türkiye sabit UTC+3
+    const wd = ist.getUTCDay() === 0 ? 7 : ist.getUTCDay()
+    await db.query(`update working_hours set is_closed = false, opens_at = '00:00', closes_at = '23:55', break_starts_at = null, break_ends_at = null where weekday = $1`, [wd])
+    await db.exec('update business_settings set booking_interval_minutes = 5, minimum_booking_notice_minutes = 0')
+    const date = ist.toISOString().slice(0, 10)
+    const minutes = ist.getUTCHours() * 60 + ist.getUTCMinutes()
+    const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+    return { date, minutes, hhmm }
+  }
+
+  it('bugün, şu andan sonraki geçerli bir saate randevu alınabilir ve o saat listede görünür', async (ctx) => {
+    const { date, minutes, hhmm } = await openToday()
+    const next = Math.ceil((minutes + 10) / 5) * 5
+    if (next + 30 > 23 * 60 + 55) ctx.skip() // gece yarısına çok yakın: bugün için yer kalmadı
+    expect(await slotsOf(date)).toContain(hhmm(next))
+    const r = await book({ start: at(date, hhmm(next)) })
+    expect(r.reference_code).toMatch(/^FD-/)
+  })
+
+  it('bugünün geçmiş saati reddedilir ve listede gösterilmez (istek elle değiştirilse bile)', async (ctx) => {
+    const { date, minutes, hhmm } = await openToday()
+    const prev = Math.floor((minutes - 10) / 5) * 5
+    if (prev < 0) ctx.skip() // gece yarısından hemen sonra: bugünün geçmiş saati yok
+    expect(await slotsOf(date)).not.toContain(hhmm(prev))
+    await expectError(book({ start: at(date, hhmm(prev)) }), 'too_soon')
+  })
+
+  it('bugün, müsait saat kaldığı sürece tarih seçicide seçilebilir', async (ctx) => {
+    const { date, minutes } = await openToday()
+    if (minutes + 40 > 23 * 60 + 55) ctx.skip()
+    const r = await db.query<{ day: Date }>('select day from get_available_dates($1,$2,$2)', [serviceIds['Saç Kesimi'], date])
+    expect(r.rows.map((x) => new Date(x.day).toISOString().slice(0, 10))).toEqual([date])
   })
 })
