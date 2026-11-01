@@ -237,6 +237,32 @@ export async function setAppointmentStatus(id: string, status: AdminStatusChange
   unwrap(res)
 }
 
+export interface BulkCancelResult { id: string; ok: boolean; code?: string }
+
+/**
+ * Toplu iptal: her randevu ayrı ayrı, sırayla, mevcut admin_set_appointment_status ile iptal edilir.
+ * Yetki, satır kilidi ve "zaten iptal edilmiş" denetimi sunucudadır; biri başarısız olsa da diğerleri
+ * denenir ve her randevunun sonucu ayrı döner (yalnızca ok olanlar gerçekten bu işlemde iptal edildi).
+ * Oturum düşerse kalanlar denenmez.
+ */
+export async function cancelAppointments(ids: string[]): Promise<BulkCancelResult[]> {
+  const out: BulkCancelResult[] = []
+  for (const [i, id] of ids.entries()) {
+    try {
+      await setAppointmentStatus(id, 'cancelled')
+      out.push({ id, ok: true })
+    } catch (e) {
+      const code = toAppError(e).code
+      out.push({ id, ok: false, code })
+      if (code === 'session_expired' || code === 'forbidden') {
+        for (const rest of ids.slice(i + 1)) out.push({ id: rest, ok: false, code: 'not_attempted' })
+        break
+      }
+    }
+  }
+  return out
+}
+
 /** Yeniden planlama için uygun başlangıç anları: randevunun kendi süresiyle, kendisi hariç (ISO, UTC). */
 export async function fetchRescheduleSlots(id: string, date: string): Promise<string[]> {
   const res = await (await client()).rpc('admin_available_slots', { p_id: id, p_date: date })

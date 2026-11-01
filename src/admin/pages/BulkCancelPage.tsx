@@ -1,0 +1,280 @@
+import { Check, Copy, MessageCircle, RotateCw, XCircle } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from '../../components/ui/Button'
+import { Dialog } from '../../components/ui/Dialog'
+import { EmptyState, ErrorPanel, Notice, Spinner, SuccessNote } from '../../components/ui/feedback'
+import { Field, inputClass } from '../../components/ui/Field'
+import { cancelAppointments, fetchAppointmentsForDay, type BulkCancelResult } from '../../lib/api'
+import { buildCancelMessage, MAX_REASON_LENGTH, normalizeReason, selectFromTime, whatsAppLink } from '../../lib/bulkCancel'
+import { AppError } from '../../lib/errors'
+import { formatTrPhone } from '../../lib/phone'
+import { formatDateLong, isValidDateString, minutesToHhmm, hhmmToMinutes, timeOfInstant } from '../../lib/time'
+import type { AppointmentRow } from '../../lib/types'
+import { useAsync } from '../../lib/useAsync'
+import { useIstanbulToday } from '../../lib/useToday'
+import { PageHeader } from '../AdminLayout'
+import { StatusBadge, TestBadge } from '../StatusBadge'
+
+/** Bugün için varsayılan başlangıç: şu anki İstanbul saati, yarım saate yuvarlanmış (aşağı). */
+function defaultFromTime(): string {
+  const m = hhmmToMinutes(timeOfInstant(new Date()))
+  return minutesToHhmm(Math.floor(m / 30) * 30)
+}
+
+interface Done {
+  date: string
+  message: string
+  cancelled: AppointmentRow[]
+  failed: { appointment: AppointmentRow; error: string }[]
+}
+
+/**
+ * Toplu Randevu İptali: gün + başlangıç saati seçilir, etkilenecek randevular gösterilir, onaydan sonra
+ * her biri sunucuda ayrı ayrı iptal edilir. Ardından yalnızca bu işlemde iptal edilenlerin müşterileri için
+ * WhatsApp sohbeti hazır mesajla açılır; gönderimi yönetici kendisi yapar (otomatik gönderim yok).
+ */
+export function BulkCancelPage() {
+  const today = useIstanbulToday()
+  const [date, setDate] = useState(today)
+  const [fromTime, setFromTime] = useState(defaultFromTime)
+  const [reason, setReason] = useState('')
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  const [confirming, setConfirming] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState<Done | null>(null)
+  const inFlight = useRef(false)
+
+  const day = useAsync(async () => ({ date, appointments: await fetchAppointmentsForDay(date) }), [date])
+  const current = day.data && day.data.date === date ? day.data : undefined
+  const validTime = /^\d{2}:\d{2}$/.test(fromTime)
+
+  const candidates = useMemo(
+    () => (current && validTime ? selectFromTime(current.appointments, date, fromTime) : []),
+    [current, date, fromTime, validTime],
+  )
+  // Gün veya saat değişince elle çıkarılanlar sıfırlanır: her seçim baştan "hepsi" ile başlar.
+  useEffect(() => { setExcluded(new Set()) }, [date, fromTime])
+
+  const selected = candidates.filter((a) => !excluded.has(a.id))
+  const cleanReason = normalizeReason(reason)
+  const message = buildCancelMessage(reason, date, today)
+  const canSubmit = selected.length > 0 && cleanReason !== null && !running && !day.loading
+
+  function toggle(id: string) {
+    setExcluded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function run() {
+    if (inFlight.current || !cleanReason) return
+    inFlight.current = true
+    setRunning(true); setError(null)
+    const targets = selected
+    try {
+      const results: BulkCancelResult[] = await cancelAppointments(targets.map((a) => a.id))
+      const byId = new Map(targets.map((a) => [a.id, a]))
+      setDone({
+        date,
+        message,
+        cancelled: results.filter((r) => r.ok).map((r) => byId.get(r.id)!),
+        failed: results.filter((r) => !r.ok).map((r) => ({ appointment: byId.get(r.id)!, error: new AppError(r.code ?? 'unknown').message })),
+      })
+      setConfirming(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      inFlight.current = false
+      setRunning(false)
+      day.reload() // durumlar her zaman sunucudan yeniden okunur
+    }
+  }
+
+  function startOver() {
+    setDone(null); setReason(''); setExcluded(new Set()); setError(null)
+  }
+
+  if (done) return <Results done={done} onStartOver={startOver} />
+
+  return (
+    <div>
+      <PageHeader
+        title="Toplu Randevu İptali"
+        description="Bir günün belirli saatinden sonraki randevularını tek seferde iptal edin. İptal edilen müşterilere WhatsApp mesajı hazırlanır."
+      />
+
+      <div className="card mb-5 grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
+        <Field id="bulk-date" label="Tarih" required>
+          {(p) => (
+            <input {...p} type="date" value={date} min={today}
+              onChange={(e) => { if (isValidDateString(e.target.value)) setDate(e.target.value) }}
+              className={inputClass} />
+          )}
+        </Field>
+        <Field id="bulk-from" label="Bu saatten itibaren" required hint="Bu saatte ve sonrasında başlayan randevular listelenir.">
+          {(p) => <input {...p} type="time" step={300} value={fromTime} onChange={(e) => setFromTime(e.target.value)} className={inputClass} />}
+        </Field>
+        <div className="sm:col-span-2">
+          <Field id="bulk-reason" label="İptal nedeni" required hint="Bir kez yazın; bütün müşterilere aynı neden gider.">
+            {(p) => (
+              <textarea {...p} rows={2} maxLength={MAX_REASON_LENGTH} value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Örn. Acil bir sağlık durumu nedeniyle"
+                className={inputClass} />
+            )}
+          </Field>
+        </div>
+      </div>
+
+      {day.error && <div className="mb-4"><ErrorPanel message={day.error.message} onRetry={day.reload} /></div>}
+      {!current && day.loading && <Spinner label="Randevular yükleniyor…" />}
+
+      {current && (
+        <section aria-labelledby="bulk-list-title" className="mb-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 id="bulk-list-title" className="text-base font-semibold">
+              {formatDateLong(date)}{validTime ? `, ${fromTime} ve sonrası` : ''}
+            </h2>
+            <Button variant="secondary" size="sm" onClick={day.reload} aria-label="Listeyi yenile"
+              icon={<RotateCw className={`h-4 w-4 ${day.loading ? 'animate-spin' : ''}`} aria-hidden />} />
+          </div>
+
+          {candidates.length === 0 ? (
+            <EmptyState>Bu saatten sonra iptal edilecek (onay bekleyen veya onaylı) randevu yok.</EmptyState>
+          ) : (
+            <ul className="card divide-y divide-line">
+              {candidates.map((a) => {
+                const on = !excluded.has(a.id)
+                return (
+                  <li key={a.id}>
+                    <label className="flex cursor-pointer items-center gap-3 p-3 sm:p-4">
+                      <input type="checkbox" checked={on} onChange={() => toggle(a.id)} className="h-5 w-5 shrink-0 accent-[rgb(var(--accent))]" />
+                      <span className="w-12 shrink-0 font-semibold tabular-nums">{timeOfInstant(a.starts_at)}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                          {a.customer_first_name} {a.customer_last_name} {a.is_test && <TestBadge />}
+                        </span>
+                        <span className="block truncate text-xs text-muted">
+                          {formatTrPhone(a.customer_phone)} · {a.service_name ?? a.services?.name ?? 'Hizmet'}
+                        </span>
+                      </span>
+                      <StatusBadge status={a.status} compact />
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {candidates.length > 0 && (
+        <div className="card mb-5 p-4 sm:p-5">
+          <p className="mb-2 text-sm font-medium">Müşterilere gidecek mesaj</p>
+          <p className="whitespace-pre-line rounded-lg border border-line bg-bg p-3 text-sm">
+            {cleanReason ? message : 'İptal nedenini yazınca mesaj burada görünür.'}
+          </p>
+          <p className="mt-2 text-xs text-muted">Mesajda müşterinin adı ve randevu saati yer almaz.</p>
+        </div>
+      )}
+
+      {error && <div className="mb-4"><ErrorPanel message={error} /></div>}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="danger" disabled={!canSubmit} onClick={() => setConfirming(true)} icon={<XCircle className="h-4 w-4" aria-hidden />}>
+          {selected.length > 0 ? `${selected.length} randevuyu iptal et` : 'Randevuları iptal et'}
+        </Button>
+        {candidates.length > 0 && !cleanReason && <span className="text-sm text-muted">Devam etmek için iptal nedenini yazın.</span>}
+      </div>
+
+      <Dialog open={confirming} onClose={() => { if (!running) setConfirming(false) }} title="Toplu iptali onaylayın">
+        <p className="text-sm">
+          <strong>{formatDateLong(date)}</strong> günü <strong>{selected.length}</strong> randevu iptal edilecek. Bu işlem geri alınamaz.
+        </p>
+        <p className="mt-3 text-sm text-muted">İptal nedeni: {cleanReason}</p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirming(false)} disabled={running}>Vazgeç</Button>
+          <Button variant="danger" onClick={run} loading={running} disabled={running}>Evet, {selected.length} randevuyu iptal et</Button>
+        </div>
+      </Dialog>
+    </div>
+  )
+}
+
+function Results({ done, onStartOver }: { done: Done; onStartOver: () => void }) {
+  const [opened, setOpened] = useState<Set<string>>(new Set())
+  const [copied, setCopied] = useState(false)
+
+  async function copyMessage() {
+    try { await navigator.clipboard.writeText(done.message); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { /* kopyalanamadı */ }
+  }
+
+  return (
+    <div>
+      <PageHeader title="Toplu Randevu İptali" description={formatDateLong(done.date)} />
+
+      {done.cancelled.length > 0 && <div className="mb-4"><SuccessNote>{done.cancelled.length} randevu iptal edildi.</SuccessNote></div>}
+      {done.failed.length > 0 && (
+        <div className="mb-4">
+          <ErrorPanel message={`${done.failed.length} randevu iptal edilemedi; durumları değişmedi ve bunlara mesaj hazırlanmadı.`} />
+          <ul className="mt-2 space-y-1 text-sm">
+            {done.failed.map(({ appointment: a, error }) => (
+              <li key={a.id}><span className="tabular-nums">{timeOfInstant(a.starts_at)}</span> · {a.customer_first_name} {a.customer_last_name}: <span className="text-muted">{error}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {done.cancelled.length > 0 && (
+        <>
+          <Notice>
+            Normal WhatsApp hesabından otomatik mesaj göndermenin resmî bir yolu yok. Her müşteri için
+            <strong> "WhatsApp'ta aç"</strong> düğmesi sohbeti mesaj yazılmış olarak açar; mesajı <strong>siz gönderirsiniz</strong>.
+            Bu liste sayfadan ayrılınca kaybolur; mesajları göndermeden sayfayı kapatmayın.
+          </Notice>
+
+          <div className="card my-4 p-4">
+            <p className="whitespace-pre-line text-sm">{done.message}</p>
+            <Button variant="secondary" size="sm" className="mt-3" onClick={copyMessage}
+              icon={copied ? <Check className="h-4 w-4 text-success" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}>
+              {copied ? 'Kopyalandı' : 'Mesajı kopyala'}
+            </Button>
+          </div>
+
+          <p className="mb-2 text-sm text-muted">{opened.size} / {done.cancelled.length} sohbet açıldı</p>
+          <ul className="card mb-5 divide-y divide-line">
+            {done.cancelled.map((a) => {
+              const link = whatsAppLink(a.customer_phone, done.message)
+              const isOpened = opened.has(a.id)
+              return (
+                <li key={a.id} className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
+                  <span className="w-12 shrink-0 font-semibold tabular-nums">{timeOfInstant(a.starts_at)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{a.customer_first_name} {a.customer_last_name}</span>
+                    <span className="block text-xs text-muted">{formatTrPhone(a.customer_phone)}</span>
+                  </span>
+                  {link ? (
+                    <a href={link} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setOpened((s) => new Set(s).add(a.id))}
+                      className={`inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg border px-4 text-sm font-medium ${isOpened ? 'border-line text-muted' : 'border-success bg-success/10 text-success hover:bg-success/20'}`}>
+                      {isOpened ? <Check className="h-4 w-4" aria-hidden /> : <MessageCircle className="h-4 w-4" aria-hidden />}
+                      {isOpened ? 'Açıldı' : "WhatsApp'ta aç"}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-danger">Numara WhatsApp için uygun değil</span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+
+      <Button variant="secondary" onClick={onStartOver}>Yeni toplu iptal</Button>
+    </div>
+  )
+}

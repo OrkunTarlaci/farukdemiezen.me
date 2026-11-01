@@ -14,6 +14,7 @@ const WeekPage = lazy(() => import('./pages/WeekPage').then((m) => ({ default: m
 const SearchPage = lazy(() => import('./pages/SearchPage').then((m) => ({ default: m.SearchPage })))
 const ServicesPage = lazy(() => import('./pages/ServicesPage').then((m) => ({ default: m.ServicesPage })))
 const HoursPage = lazy(() => import('./pages/HoursPage').then((m) => ({ default: m.HoursPage })))
+const BulkCancelPage = lazy(() => import('./pages/BulkCancelPage').then((m) => ({ default: m.BulkCancelPage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 
 /** /admin — kimlik doğrulama kapısı. Veri koruması arayüzde değil, RLS'tedir; bu yalnızca deneyim katmanıdır. */
@@ -29,6 +30,7 @@ export function AdminPage() {
             <Route path="gun" element={<DayPage />} />
             <Route path="takvim" element={<WeekPage />} />
             <Route path="ara" element={<SearchPage />} />
+            <Route path="toplu-iptal" element={<BulkCancelPage />} />
             <Route path="hizmetler" element={<ServicesPage />} />
             <Route path="saatler" element={<HoursPage />} />
             <Route path="ayarlar" element={<SettingsPage />} />

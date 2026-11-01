@@ -1,4 +1,4 @@
-import { CalendarDays, CalendarRange, Clock, LayoutDashboard, LogOut, Scissors, Search, Settings } from 'lucide-react'
+import { CalendarDays, CalendarRange, CalendarX, Clock, LayoutDashboard, LogOut, Scissors, Search, Settings } from 'lucide-react'
 import { Suspense, type ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Spinner } from '../components/ui/feedback'
@@ -9,6 +9,7 @@ const NAV = [
   { to: '/admin/gun', label: 'Günlük Randevular', icon: CalendarDays },
   { to: '/admin/takvim', label: 'Takvim', icon: CalendarRange },
   { to: '/admin/ara', label: 'Ara ve Filtrele', icon: Search },
+  { to: '/admin/toplu-iptal', label: 'Toplu İptal', icon: CalendarX },
   { to: '/admin/hizmetler', label: 'Hizmetler', icon: Scissors },
   { to: '/admin/saatler', label: 'Çalışma Saatleri', icon: Clock },
   { to: '/admin/ayarlar', label: 'Ayarlar', icon: Settings },

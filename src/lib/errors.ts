@@ -24,6 +24,7 @@ const MESSAGES: Record<string, string> = {
   session_expired: 'Oturumunuzun süresi doldu. Lütfen tekrar giriş yapın.',
   forbidden: 'Bu işlem için yetkiniz yok.',
   already_cancelled: 'Bu randevu zaten iptal edilmiş.',
+  not_attempted: 'Önceki hata nedeniyle bu randevu denenmedi; durumu değişmedi.',
   not_found: 'Randevu bulunamadı.',
   invalid_credentials: 'E-posta veya parola hatalı.',
   captcha_required: 'Lütfen güvenlik doğrulamasını tamamlayın.',
