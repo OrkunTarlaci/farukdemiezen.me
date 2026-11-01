@@ -1,5 +1,9 @@
 name: GitHub Pages'e Dağıt
 
+# Vite uygulamasını derleyip GitHub Pages'e yayınlar (GitHub Actions kaynaklı Pages).
+# ÖNEMLİ: Settings → Pages → Build and deployment → Source = "GitHub Actions" olmalıdır.
+# "Deploy from a branch" seçiliyse GitHub derlenmemiş kaynak dosyaları yayınlar ve site beyaz görünür.
+
 on:
   push:
     branches: [main]
@@ -10,58 +14,79 @@ permissions:
   pages: write
   id-token: write
 
+# Aynı anda tek yayın; çalışmakta olan bir yayın yarıda kesilmez (GitHub'ın önerdiği ayar).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # GENEL (herkese açık) değerler: derlenmiş JavaScript'e gömülür. Supabase publishable/anon anahtarı
+      # RLS ile korunduğu için tarayıcıda olabilir. service_role anahtarını ASLA buraya koymayın.
+      # Değerler depo ayarlarındaki Actions Variables'tan okunur; yanlışlıkla Secrets'a girildiyse oradan.
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY || secrets.VITE_TURNSTILE_SITE_KEY }}
+      # Proje sayfası için "/<depo-adı>/"; özel alan adı kullanılırsa VITE_BASE_PATH değişkenini "/" yapın.
+      VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || format('/{0}/', github.event.repository.name) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
 
-      - run: npm ci
-
       - name: Yapılandırmayı denetle
-        env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
         run: |
-          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "::error::VITE_SUPABASE_URL ve VITE_SUPABASE_ANON_KEY Actions değişkenleri tanımlı olmalı (README, bölüm 5)."
+          missing=""
+          [ -z "$VITE_SUPABASE_URL" ] && missing="$missing VITE_SUPABASE_URL"
+          [ -z "$VITE_SUPABASE_ANON_KEY" ] && missing="$missing VITE_SUPABASE_ANON_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error title=Eksik değişken::Tanımlı değil:$missing. GitHub'da Settings → Secrets and variables → Actions → Variables sekmesi → New repository variable ile ekleyin (değerler yerel .env dosyanızda)."
             exit 1
           fi
+          case "$VITE_SUPABASE_URL" in
+            https://*.supabase.co|https://*.supabase.co/) ;;
+            *) echo "::warning title=Supabase adresi::VITE_SUPABASE_URL beklenen 'https://<proje>.supabase.co' biçiminde değil. Değeri kontrol edin." ;;
+          esac
           # Turnstile yoksa site yayınlanır ama müşteri randevu alamaz ("güvenlik doğrulaması yapılandırılmamış"
           # mesajı görünür). Sunucu yine gerçek doğrulama ister; güvenlik gevşemez.
           if [ -z "$VITE_TURNSTILE_SITE_KEY" ]; then
-            echo "::warning::VITE_TURNSTILE_SITE_KEY tanımlı değil: site açılır ama online randevu alınamaz (README, bölüm 3)."
+            echo "::warning title=Turnstile::VITE_TURNSTILE_SITE_KEY tanımlı değil: site açılır ama online randevu alınamaz."
           fi
           case "$VITE_TURNSTILE_SITE_KEY" in
-            1x000*|2x000*|3x000*) echo "::warning::VITE_TURNSTILE_SITE_KEY bir Cloudflare TEST anahtarı; üretimde gerçek site anahtarını kullanın." ;;
+            1x000*|2x000*|3x000*) echo "::warning title=Turnstile::VITE_TURNSTILE_SITE_KEY bir Cloudflare TEST anahtarı; canlıda gerçek site anahtarını kullanın." ;;
           esac
+          echo "Yayın yolu (base): $VITE_BASE_PATH"
+
+      - run: npm ci
 
       - name: Testler
         run: npm test
 
       - name: Derle
         run: npm run build
-        env:
-          # Bunlar GENEL değerlerdir ve derlenmiş JavaScript içinde görünür.
-          # Supabase anon/publishable anahtarı RLS ile korunduğu için burada olabilir.
-          # service_role anahtarını ASLA buraya koymayın.
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
-          # Proje sayfası için "/<repo-adı>/"; özel alan adı için "/" olmalıdır.
-          VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || format('/{0}/', github.event.repository.name) }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Derleme çıktısını doğrula
+        run: |
+          test -f dist/index.html || { echo "::error::dist/index.html üretilmedi."; exit 1; }
+          if grep -q 'src="/src/main.tsx"' dist/index.html; then
+            echo "::error::dist/index.html derlenmemiş kaynağa işaret ediyor."; exit 1
+          fi
+          grep -q "src=\"${VITE_BASE_PATH}assets/" dist/index.html || {
+            echo "::error::dist/index.html içindeki JavaScript yolu '${VITE_BASE_PATH}assets/' ile başlamıyor."; exit 1
+          }
+          # Hash yönlendirme (/#/admin) kullanıldığı için şart değil; yanlış yazılmış derin bağlantılar
+          # GitHub'ın 404 sayfası yerine uygulamayı açsın diye kopyalanır.
+          cp dist/index.html dist/404.html
+          echo "Doğrulandı: $(grep -o "src=\"${VITE_BASE_PATH}assets/[^\"]*\"" dist/index.html)"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 

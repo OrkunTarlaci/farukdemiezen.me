@@ -8,6 +8,9 @@ dist
 supabase/.temp
 supabase/.branches
 *.tsbuildinfo
+coverage
+*.log
+Thumbs.db
 
 # Claude Code yerel önizleme ayarı (geliştirme bilgisayarına özgü)
 .claude/
