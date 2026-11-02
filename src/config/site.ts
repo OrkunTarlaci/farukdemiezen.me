@@ -16,14 +16,47 @@ export const siteConfig = {
     imageAlt: 'Berber aletleri: ustura ve tarak',
   },
 
-  // GEÇİCİ METİN: Faruk Demirezen'in onayıyla güncellenmelidir.
+  // "Faruk Demirezen kimdir" bölümü. METİNLER FARUK BEY'İN KENDİ ANLATIMIYLA DOLDURULACAK.
   // Unvan, deneyim yılı, ödül gibi doğrulanmamış bilgiler eklemeyin.
+  // Bir alan null ise canlı sitede o kısım hiç görünmez; geliştirme önizlemesinde (npm run dev)
+  // kesikli çerçeveli bir "Doldurulacak" kutusu olarak görünür, böylece nereye ne yazılacağı görülür.
   about: {
     title: 'Hakkında',
-    paragraphs: [
-      'Her randevu önceden ayrılır; acele edilmeden, tek bir müşteriye odaklanarak çalışılır.',
-      'Saç ve sakal bakımında sade, temiz ve düzenli bir iş hedeflenir.',
+    // Fotoğraf: public/images altındaki dosya. null yapılırsa fotoğraf gösterilmez.
+    photoUrl: 'images/faruk-demirezen.jpg' as string | null,
+    photoAlt: 'Faruk Demirezen, siyah balıkçı yaka kazak ve kadife mont giymiş, kameraya bakıyor',
+    // Başlığın altındaki tek cümlelik tanıtım. Örn. "Kendini tanıtan bir cümle."
+    intro: null as string | null,
+    // Hikâye bölümleri. Başlıklar değiştirilebilir, bölüm eklenip çıkarılabilir.
+    // text: bir veya birkaç paragraf (her paragraf dizide ayrı bir metin).
+    story: [
+      {
+        title: 'Kimdir',
+        hint: 'Nereli, nerede yetişti, kısaca kendini nasıl anlatır.',
+        text: null as string[] | null,
+      },
+      {
+        title: 'Bu mesleğe nasıl başladı',
+        hint: 'Berberliğe ilk ne zaman, nasıl ve kimin yanında başladı; ilk dükkânı.',
+        text: null as string[] | null,
+      },
+      {
+        title: 'Neden bu işi yapıyor',
+        hint: 'Bu mesleği neden seviyor, işin hangi yanı onun için önemli.',
+        text: null as string[] | null,
+      },
+      {
+        title: 'Çalışma anlayışı',
+        hint: 'Müşteriye nasıl yaklaşır, işinde neye dikkat eder.',
+        // GEÇİCİ METİN: Faruk Bey'in onayıyla güncellenmelidir.
+        text: [
+          'Her randevu önceden ayrılır; acele edilmeden, tek bir müşteriye odaklanarak çalışılır.',
+          'Saç ve sakal bakımında sade, temiz ve düzenli bir iş hedeflenir.',
+        ] as string[] | null,
+      },
     ],
+    // İsteğe bağlı kısa alıntı (Faruk Bey'in kendi sözü). Örn. işi hakkında tek cümle.
+    quote: null as string | null,
   },
 
   // KVKK AYDINLATMA METNİ — TASLAK. Hukuki incelemeden geçmemiştir; uygunluğu doğrulanmamıştır.
