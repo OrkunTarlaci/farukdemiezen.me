@@ -13,7 +13,7 @@ export const siteConfig = {
     // Onaylı bir fotoğraf eklendiğinde buraya tam URL veya /public altındaki yolu yazın (örn. 'images/hero.jpg').
     // null ise sade bir çizim gösterilir.
     imageUrl: null as string | null,
-    imageAlt: 'Berber aletleri: ustura ve tarak',
+    imageAlt: 'Berber amblemi: berber direği, makas ve ustura',
   },
 
   // "Faruk Demirezen kimdir" bölümü. METİNLER FARUK BEY'İN KENDİ ANLATIMIYLA DOLDURULACAK.
