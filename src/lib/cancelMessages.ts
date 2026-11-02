@@ -11,16 +11,34 @@ export function whenPhrase(startsAt: string, today: string = todayIstanbul()): s
   return `${day} saat ${timeOfInstant(startsAt)}`
 }
 
+// Saatin okunuşundaki son kelimeye göre bulunma eki: 10:00 "on" → 'daki, 17:00 "on yedi" → 'deki,
+// 14:45 "kırk beş" → 'teki, 16:40 "kırk" → 'taki.
+const UNIT_SUFFIX = ['', 'deki', 'deki', 'teki', 'teki', 'teki', 'daki', 'deki', 'deki', 'daki']
+const TENS_SUFFIX = ['daki', 'daki', 'deki', 'daki', 'taki', 'deki']
+
+/** "17:00" → "17:00'deki" */
+export function timeWithLocative(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number)
+  const n = m || h
+  return `${hhmm}'${n % 10 ? UNIT_SUFFIX[n % 10] : TENS_SUFFIX[Math.floor(n / 10)]}`
+}
+
+/** "yarın saat 10:00'daki" */
+function atPhrase(startsAt: string, today?: string): string {
+  const time = timeOfInstant(startsAt)
+  return whenPhrase(startsAt, today).replace(new RegExp(`${time}$`), timeWithLocative(time))
+}
+
 /** Müşterinin işletmeye gönderdiği iptal isteği. Referans kodu, doğru randevunun bulunması içindir. */
 export function customerCancelRequestMessage(ownerName: string, startsAt: string, referenceCode: string, today?: string): string {
-  return `${ownerName} Bey merhaba, ${whenPhrase(startsAt, today)} için aldığım randevuyu iptal etmek istiyorum. (Referans: ${referenceCode})`
+  return `${ownerName} Bey merhaba, ${atPhrase(startsAt, today)} berber randevumu iptal etmek istiyorum. (Referans: ${referenceCode})`
 }
 
 /** İşletmenin, reddettiği veya iptal ettiği randevu için müşteriye gönderdiği mesaj. Neden isteğe bağlıdır. */
 export function adminCancelMessage(startsAt: string, reason: string | null | undefined, signature: string, today?: string): string {
   const r = reason ? normalizeReason(reason) : null
   return [
-    `Merhaba, ${whenPhrase(startsAt, today)} için aldığınız randevuyu iptal etmek durumundayım.`,
+    `Merhaba, ${atPhrase(startsAt, today)} berber randevunuzu iptal etmek durumundayım.`,
     ...(r ? [`Nedeni: ${r}`] : []),
     'Anlayışınız için teşekkür ederim.',
     signature,

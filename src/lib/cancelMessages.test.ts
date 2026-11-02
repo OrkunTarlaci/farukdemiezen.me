@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adminCancelMessage, businessWhatsAppLink, customerCancelRequestMessage, whenPhrase } from './cancelMessages'
+import { adminCancelMessage, businessWhatsAppLink, customerCancelRequestMessage, timeWithLocative, whenPhrase } from './cancelMessages'
 import { zonedToInstant } from './time'
 
 const TODAY = '2026-11-02'
@@ -14,15 +14,21 @@ describe('tek randevu iptal mesajları', () => {
     expect(whenPhrase(at('2026-11-03', '00:30'), TODAY)).toBe('yarın saat 00:30')
   })
 
+  it('saate okunuşuna uygun bulunma eki getirir', () => {
+    expect(['10:00', '17:00', '12:00', '09:30', '14:45', '16:40', '11:00', '13:00', '19:00', '15:20', '18:50', '00:00'].map(timeWithLocative)).toEqual([
+      "10:00'daki", "17:00'deki", "12:00'deki", "09:30'daki", "14:45'teki", "16:40'taki", "11:00'deki", "13:00'teki", "19:00'daki", "15:20'deki", "18:50'deki", "00:00'daki",
+    ])
+  })
+
   it('müşterinin iptal isteği saati ve referansı içerir', () => {
     expect(customerCancelRequestMessage('Faruk', at(TODAY, '17:00'), 'FD-AB12', TODAY)).toBe(
-      'Faruk Bey merhaba, bugün saat 17:00 için aldığım randevuyu iptal etmek istiyorum. (Referans: FD-AB12)',
+      "Faruk Bey merhaba, bugün saat 17:00'deki berber randevumu iptal etmek istiyorum. (Referans: FD-AB12)",
     )
   })
 
   it('işletme mesajı nedeni yalnızca yazıldıysa ekler', () => {
     expect(adminCancelMessage(at(TODAY, '10:00'), '  Elektrik   kesintisi ', 'Faruk Demirezen', TODAY)).toBe(
-      'Merhaba, bugün saat 10:00 için aldığınız randevuyu iptal etmek durumundayım.\nNedeni: Elektrik kesintisi\nAnlayışınız için teşekkür ederim.\nFaruk Demirezen',
+      "Merhaba, bugün saat 10:00'daki berber randevunuzu iptal etmek durumundayım.\nNedeni: Elektrik kesintisi\nAnlayışınız için teşekkür ederim.\nFaruk Demirezen",
     )
     expect(adminCancelMessage(at(TODAY, '10:00'), '   ', 'Faruk Demirezen', TODAY)).not.toContain('Nedeni')
     expect(adminCancelMessage(at(TODAY, '10:00'), null, 'Faruk Demirezen', TODAY)).not.toContain('Nedeni')

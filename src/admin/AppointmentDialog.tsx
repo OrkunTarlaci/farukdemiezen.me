@@ -135,6 +135,11 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
   async function cancel() {
     if (!a || inFlight.current) return
     const r = normalizeReason(reason)
+    const link = whatsAppLink(a.customer_phone, adminCancelMessage(a.starts_at, r, siteConfig.name))
+    // Tarayıcılar, sunucu yanıtını bekledikten sonra açılan pencereyi engeller. Bu yüzden WhatsApp sekmesi
+    // tıklama anında boş açılır; iptal sunucuda başarılı olursa mesaja yönlendirilir, olmazsa kapatılır.
+    // Böylece müşteriye iptal edilmemiş bir randevu için mesaj gitmez.
+    const win = link ? window.open('', '_blank') : null
     inFlight.current = true
     setBusy('cancelled'); setError(null); setDone(null)
     try {
@@ -147,9 +152,15 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
       setDone(DONE_MESSAGES.cancelled)
       setConfirmingCancel(false)
       setCancelledNow({ reason: r })
+      if (win && link) {
+        win.opener = null
+        win.location.href = link
+        void markNotice(a.id, Boolean(r))
+      }
       onChanged()
       void notify(a.id)
     } catch (e) {
+      win?.close()
       setError(toAppError(e).message)
       onChanged()
     } finally {
@@ -336,7 +347,7 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
 
           {confirmingCancel && (
             <div role="alertdialog" aria-label="İptal onayı" className="mt-5 rounded-lg border border-danger/40 bg-danger/[0.08] p-4">
-              <p className="text-sm">Bu randevuyu {a.status === 'pending' ? 'reddetmek' : 'iptal etmek'} istediğinizden emin misiniz? İptal geri alınamaz ve saat yeniden müsait olur. Sonrasında müşteriye hazır WhatsApp mesajı açabilirsiniz.</p>
+              <p className="text-sm">Bu randevuyu {a.status === 'pending' ? 'reddetmek' : 'iptal etmek'} istediğinizden emin misiniz? İptal geri alınamaz ve saat yeniden müsait olur. Onayladığınızda randevu iptal edilir ve müşterinin WhatsApp sohbeti aşağıdaki mesajla açılır; WhatsApp’ta gönder tuşuna basmanız yeterlidir.</p>
               <label className="mt-3 block text-sm">
                 <span className="mb-1.5 block text-muted">Nedeni (isteğe bağlı, mesaja eklenir)</span>
                 <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={MAX_REASON_LENGTH} rows={2}
@@ -345,7 +356,7 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
               <p className="mt-3 text-xs text-muted">Müşteriye gidecek mesaj:</p>
               <p className="mt-1 whitespace-pre-line rounded-md bg-bg/60 p-3 text-sm text-fg/90">{draftText}</p>
               <div className="mt-3 flex flex-wrap gap-3">
-                <Button variant="danger" loading={busy === 'cancelled'} onClick={cancel}>{a.status === 'pending' ? 'Evet, reddet' : 'Evet, iptal et'}</Button>
+                <Button variant="danger" loading={busy === 'cancelled'} onClick={cancel}>{a.status === 'pending' ? 'Reddet' : 'İptal et'}{whatsAppLink(a.customer_phone, draftText) ? ' ve WhatsApp’ı aç' : ''}</Button>
                 <Button variant="ghost" disabled={disabled} onClick={() => setConfirmingCancel(false)}>Vazgeç</Button>
               </div>
             </div>
