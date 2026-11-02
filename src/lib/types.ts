@@ -58,6 +58,9 @@ export interface AppointmentRow {
   status: AppointmentStatus
   created_at: string
   cancelled_at: string | null
+  /** İptal nedeni ve müşteriye WhatsApp açıldı mı (0008). Tek randevu iptalinde de yazılır. */
+  cancellation_reason?: string | null
+  cancel_notice_opened_at?: string | null
   /** Randevu anındaki hizmet adı ve fiyatı (0005). Eski kayıtlarda fiyat null olabilir. */
   service_name: string | null
   price_minor: number | null

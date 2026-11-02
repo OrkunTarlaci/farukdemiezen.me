@@ -164,7 +164,7 @@ export async function checkIsAdmin(): Promise<boolean> {
 }
 
 const APPOINTMENT_COLUMNS =
-  'id, reference_code, service_id, service_name, price_minor, is_test, customer_first_name, customer_last_name, customer_phone, customer_email, customer_note, starts_at, ends_at, status, created_at, cancelled_at, services(name, duration_minutes)'
+  'id, reference_code, service_id, service_name, price_minor, is_test, customer_first_name, customer_last_name, customer_phone, customer_email, customer_note, starts_at, ends_at, status, created_at, cancelled_at, cancellation_reason, cancel_notice_opened_at, services(name, duration_minutes)'
 
 /** Yönetici listelerinde tek seferde en fazla bu kadar gün sorgulanır. */
 export const MAX_ADMIN_RANGE_DAYS = 92

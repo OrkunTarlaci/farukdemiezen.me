@@ -1,13 +1,16 @@
-import { AlertTriangle, CalendarClock } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Check, MessageCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { Dialog } from '../components/ui/Dialog'
 import { ErrorPanel, Spinner, SuccessNote } from '../components/ui/feedback'
 import { inputClass } from '../components/ui/Field'
+import { siteConfig } from '../config/site'
 import {
-  deleteTestAppointment, fetchRescheduleSlots, rescheduleAppointment, setAppointmentStatus, triggerNotifications, type AdminStatusChange,
+  cancelAppointments, deleteTestAppointment, markCancelNoticeOpened, fetchRescheduleSlots, rescheduleAppointment, setAppointmentStatus, triggerNotifications, type AdminStatusChange,
 } from '../lib/api'
-import { toAppError } from '../lib/errors'
+import { MAX_REASON_LENGTH, normalizeReason, whatsAppLink } from '../lib/bulkCancel'
+import { adminCancelMessage } from '../lib/cancelMessages'
+import { AppError, toAppError } from '../lib/errors'
 import { ISSUE_LABELS, type AppointmentIssue } from '../lib/schedule'
 import { dateOfInstant, formatDateLong, formatPrice, isValidDateString, timeOfInstant } from '../lib/time'
 import type { AppointmentRow } from '../lib/types'
@@ -102,11 +105,16 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
   const [smsRefresh, setSmsRefresh] = useState(0)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // İptal nedeni (isteğe bağlı) ve iptalden sonra müşteriye açılacak WhatsApp mesajı için.
+  const [reason, setReason] = useState('')
+  const [cancelledNow, setCancelledNow] = useState<{ reason: string | null } | null>(null)
+  const [noticeOpened, setNoticeOpened] = useState(false)
   const inFlight = useRef(false)
 
   useEffect(() => {
     setConfirmingCancel(false); setRescheduling(false); setError(null); setBusy(null); setDone(null)
     setSmsNote(null); setConfirmingDelete(false)
+    setReason(''); setCancelledNow(null); setNoticeOpened(false)
   }, [a?.id])
 
   /**
@@ -117,6 +125,43 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
     setSmsNote(null)
     try { await triggerNotifications(id) } catch (e) { setSmsNote(toAppError(e).message) }
     setSmsRefresh((k) => k + 1)
+  }
+
+  /**
+   * İptal / ret. Neden yazıldıysa 0008'deki admin_bulk_cancel ile tek randevu için neden de kaydedilir
+   * (Toplu İptal sayfasındaki bildirim listesinde de görünür); yazılmadıysa eski yol kullanılır.
+   * Yetki, kilit ve "zaten iptal" denetimi her iki yolda da sunucudadır.
+   */
+  async function cancel() {
+    if (!a || inFlight.current) return
+    const r = normalizeReason(reason)
+    inFlight.current = true
+    setBusy('cancelled'); setError(null); setDone(null)
+    try {
+      if (r) {
+        const [res] = await cancelAppointments([a.id], r)
+        if (!res?.ok) throw new AppError(res?.code ?? 'unknown')
+      } else {
+        await setAppointmentStatus(a.id, 'cancelled')
+      }
+      setDone(DONE_MESSAGES.cancelled)
+      setConfirmingCancel(false)
+      setCancelledNow({ reason: r })
+      onChanged()
+      void notify(a.id)
+    } catch (e) {
+      setError(toAppError(e).message)
+      onChanged()
+    } finally {
+      inFlight.current = false
+      setBusy(null)
+    }
+  }
+
+  async function markNotice(id: string, hasReason: boolean) {
+    setNoticeOpened(true)
+    // "Açıldı" işareti yalnızca nedeni kayıtlı iptallerde veritabanına yazılabilir (0008).
+    if (hasReason) { try { await markCancelNoticeOpened(id); onChanged() } catch { /* işaret kritik değil */ } }
   }
 
   async function removeTest() {
@@ -175,6 +220,13 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
     : []
 
   const disabled = busy !== null
+  // Eski iptallerde mesaj yalnızca neden kayıtlıysa gösterilir (yönetici tarafından iptal edildiği bilinir).
+  const isCancelled = Boolean(a && (cancelledNow || (a.status === 'cancelled' && a.cancellation_reason)))
+  const noticeReason = cancelledNow ? cancelledNow.reason : a?.cancellation_reason ?? null
+  const noticeText = a ? adminCancelMessage(a.starts_at, noticeReason, siteConfig.name) : ''
+  const noticeLink = a && isCancelled ? whatsAppLink(a.customer_phone, noticeText) : null
+  const noticeDone = noticeOpened || Boolean(a?.cancel_notice_opened_at)
+  const draftText = a ? adminCancelMessage(a.starts_at, reason, siteConfig.name) : ''
 
   return (
     <Dialog open={Boolean(a)} onClose={onClose} title={a ? `${a.customer_first_name} ${a.customer_last_name}` : 'Randevu'}>
@@ -207,6 +259,23 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
             {error && <ErrorPanel message={error} />}
             {done && <SuccessNote>{done}</SuccessNote>}
           </div>
+
+          {isCancelled && (
+            <div className="mt-5 rounded-lg border border-line p-4">
+              <p className="text-sm font-medium">Müşteriye WhatsApp mesajı</p>
+              <p className="mt-2 whitespace-pre-line rounded-md bg-raised p-3 text-sm text-fg/90">{noticeText}</p>
+              {noticeLink ? (
+                <a href={noticeLink} target="_blank" rel="noopener noreferrer" onClick={() => { void markNotice(a.id, Boolean(noticeReason)) }}
+                  className={`mt-3 inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg border px-4 text-sm font-medium ${noticeDone ? 'border-line text-muted' : 'border-success bg-success/10 text-success hover:bg-success/20'}`}>
+                  {noticeDone ? <Check className="h-4 w-4" aria-hidden /> : <MessageCircle className="h-4 w-4" aria-hidden />}
+                  {noticeDone ? 'WhatsApp açıldı (tekrar aç)' : 'WhatsApp’ta aç ve gönder'}
+                </a>
+              ) : (
+                <p className="mt-2 text-xs text-muted">Telefon numarası WhatsApp bağlantısı için uygun değil; mesajı kopyalayıp gönderebilirsiniz.</p>
+              )}
+              <p className="mt-2 text-xs text-muted">WhatsApp mesaj hazır olarak açılır; göndermek için WhatsApp’ta gönder tuşuna basın.</p>
+            </div>
+          )}
 
           {!confirmingCancel && !rescheduling && (
             <div className="mt-5 flex flex-wrap gap-2">
@@ -267,9 +336,16 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
 
           {confirmingCancel && (
             <div role="alertdialog" aria-label="İptal onayı" className="mt-5 rounded-lg border border-danger/40 bg-danger/[0.08] p-4">
-              <p className="text-sm">Bu randevuyu iptal etmek istediğinizden emin misiniz? İptal geri alınamaz ve saat yeniden müsait olur. Müşteriye otomatik bildirim gönderilmez; gerekirse telefonla haber verin.</p>
+              <p className="text-sm">Bu randevuyu {a.status === 'pending' ? 'reddetmek' : 'iptal etmek'} istediğinizden emin misiniz? İptal geri alınamaz ve saat yeniden müsait olur. Sonrasında müşteriye hazır WhatsApp mesajı açabilirsiniz.</p>
+              <label className="mt-3 block text-sm">
+                <span className="mb-1.5 block text-muted">Nedeni (isteğe bağlı, mesaja eklenir)</span>
+                <textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={MAX_REASON_LENGTH} rows={2}
+                  placeholder="Örn. O saatte dükkân kapalı olacak" className={inputClass} />
+              </label>
+              <p className="mt-3 text-xs text-muted">Müşteriye gidecek mesaj:</p>
+              <p className="mt-1 whitespace-pre-line rounded-md bg-bg/60 p-3 text-sm text-fg/90">{draftText}</p>
               <div className="mt-3 flex flex-wrap gap-3">
-                <Button variant="danger" loading={busy === 'cancelled'} onClick={() => change('cancelled')}>Evet, iptal et</Button>
+                <Button variant="danger" loading={busy === 'cancelled'} onClick={cancel}>{a.status === 'pending' ? 'Evet, reddet' : 'Evet, iptal et'}</Button>
                 <Button variant="ghost" disabled={disabled} onClick={() => setConfirmingCancel(false)}>Vazgeç</Button>
               </div>
             </div>

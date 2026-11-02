@@ -1,5 +1,7 @@
-import { CheckCircle2, Clock } from 'lucide-react'
+import { CheckCircle2, Clock, MessageCircle } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { siteConfig } from '../../config/site'
+import { businessWhatsAppLink, customerCancelRequestMessage } from '../../lib/cancelMessages'
 import { dateOfInstant, formatDateLong, formatDuration, formatPrice, timeOfInstant } from '../../lib/time'
 import type { BookingResult, BusinessSettings } from '../../lib/types'
 import { Button } from '../ui/Button'
@@ -17,6 +19,11 @@ export function Success({ result, settings, onNew }: Props) {
   const price = formatPrice(result.price_minor, settings.currency)
   const pending = result.status === 'pending'
   const isTest = result.is_test === true
+  const ownerName = siteConfig.name.split(' ')[0]
+  const cancelLink = businessWhatsAppLink(
+    settings.contact_phone,
+    customerCancelRequestMessage(ownerName, result.starts_at, result.reference_code),
+  )
   const rows: [string, string][] = [
     ['Hizmet', result.service_name],
     ['Tarih', formatDateLong(dateOfInstant(result.starts_at))],
@@ -60,8 +67,18 @@ export function Success({ result, settings, onNew }: Props) {
       <p className="mt-5 text-sm text-muted">
         Referans kodunuzu saklayın. Değişiklik veya iptal için
         {settings.contact_phone ? ` ${settings.contact_phone} numarasından` : ''} bizimle iletişime geçin.
+        {cancelLink && ' Gelemeyecekseniz aşağıdaki düğmeyle WhatsApp’tan hazır iptal mesajı gönderebilirsiniz.'}
       </p>
-      <Button variant="secondary" className="mt-5" onClick={onNew}>Yeni randevu al</Button>
+      <div className="mt-5 flex flex-wrap gap-3">
+        {cancelLink && (
+          <a href={cancelLink} target="_blank" rel="noopener noreferrer"
+            className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-lg border border-line px-4 text-sm font-medium text-fg hover:bg-raised">
+            <MessageCircle className="h-4 w-4 text-success" aria-hidden />
+            WhatsApp’tan iptal et
+          </a>
+        )}
+        <Button variant="secondary" onClick={onNew}>Yeni randevu al</Button>
+      </div>
     </div>
   )
 }
