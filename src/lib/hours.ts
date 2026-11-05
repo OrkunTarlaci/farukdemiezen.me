@@ -27,3 +27,9 @@ export function summarizeWorkingHours(rows: WorkingHours[]): { days: string; hou
     hours: g.hours,
   }))
 }
+
+/** Çalışma saati seçenekleri: yalnızca tam saatler. Eski kayıttaki 09:30 gibi değer kaybolmasın diye listeye eklenir. */
+export function hourOptions(current?: string): string[] {
+  const hours = Array.from({ length: 18 }, (_, i) => `${String(i + 6).padStart(2, '0')}:00`)
+  return current && !hours.includes(current) ? [...hours, current].sort() : hours
+}

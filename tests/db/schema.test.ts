@@ -1287,6 +1287,22 @@ describe('çalışma saatleri 09:00–20:00 (0013)', () => {
     expect(s[0]).toBe(wh.opens_at.slice(0, 5))
   })
 
+  it('saat başı düzeninde yarım saat sunulmaz; hafta içi 11–19, Cumartesi 10–21', async () => {
+    await apply()
+    await db.exec(`update working_hours set opens_at='11:00', closes_at='20:00' where weekday between 1 and 5`)
+    await db.exec(`update working_hours set opens_at='10:00', closes_at='22:00' where weekday = 6`)
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await db.query('update business_settings set booking_interval_minutes = 60 where id = 1') // panelin yaptığı yazma
+    })
+    expect(await slotsOf(futureDate(1))).toEqual(['11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'])
+    const sat = await slotsOf(futureDate(6))
+    expect(sat[0]).toBe('10:00')
+    expect(sat.at(-1)).toBe('21:00')
+    expect(sat.some((t) => t.endsWith(':30'))).toBe(false)
+    expect((await slotsOf(futureDate(1), 'Saç + Sakal')).at(-1)).toBe('19:00')
+    await expectError(book({ start: at(futureDate(2), '11:30') }), 'slot_invalid')
+  })
+
   it('Pazar kapalı kalır; kapalı olan başka gün de açılmaz', async () => {
     await db.exec('update working_hours set is_closed = true where weekday = 3')
     await apply()

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseAuthHash } from './authLink'
 import { sendsDeviceHeader } from './deviceToken'
+import { hourOptions } from './hours'
 import { IDLE_LIMIT_MS, isIdleExpired } from './idle'
 import { needsMfaStep } from './mfa'
 
@@ -34,6 +35,16 @@ describe('davet bağlantısı', () => {
     expect(parseAuthHash('#/admin')).toBeNull()
     expect(parseAuthHash('')).toBeNull()
     expect(parseAuthHash('#error=access_denied&error_code=otp_expired')).toEqual({ kind: 'error' })
+  })
+})
+
+describe('çalışma saati seçenekleri', () => {
+  it('yalnızca tam saatler sunar; eski yarım saat kaydı kaybolmaz', () => {
+    expect(hourOptions().every((h) => h.endsWith(':00'))).toBe(true)
+    expect(hourOptions()).toContain('11:00')
+    expect(hourOptions()).toContain('22:00')
+    expect(hourOptions('09:30')).toContain('09:30')
+    expect(hourOptions('11:00').filter((h) => h === '11:00')).toHaveLength(1)
   })
 })
 

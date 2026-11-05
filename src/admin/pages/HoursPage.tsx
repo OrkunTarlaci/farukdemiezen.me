@@ -5,12 +5,13 @@ import { useForm } from 'react-hook-form'
 import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { EmptyState, ErrorPanel, Spinner, SuccessNote } from '../../components/ui/feedback'
-import { Field, inputClass } from '../../components/ui/Field'
-import { createBlockedPeriod, deleteBlockedPeriod, fetchUpcomingBlocked, fetchWorkingHours, updateWorkingHours } from '../../lib/api'
+import { Field, inputClass, selectClass } from '../../components/ui/Field'
+import { createBlockedPeriod, deleteBlockedPeriod, fetchUpcomingBlocked, fetchWorkingHours, setHourlyAppointments, updateWorkingHours } from '../../lib/api'
 import {
   blockedPeriodSchema, blockedRange, workingHoursSchema, type BlockedPeriodFormValues, type WorkingHoursFormValues,
 } from '../../lib/adminValidation'
 import { toAppError } from '../../lib/errors'
+import { hourOptions } from '../../lib/hours'
 import { dateOfInstant, formatDateShort, timeOfInstant, todayIstanbul } from '../../lib/time'
 import type { BlockedPeriod, WorkingHours } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
@@ -47,6 +48,7 @@ function DayRow({ wh }: { wh: WorkingHours }) {
         break_starts_at: !v.is_closed && v.has_break ? v.break_starts_at : null,
         break_ends_at: !v.is_closed && v.has_break ? v.break_ends_at : null,
       })
+      await setHourlyAppointments()
       reset({ ...v, has_break: Boolean(result.break_starts_at) })
       setSaved(true)
     } catch (e) {
@@ -66,10 +68,10 @@ function DayRow({ wh }: { wh: WorkingHours }) {
       {!closed && (
         <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_auto_1fr_1fr] lg:items-end">
           <Field id={`${id}-open`} label="Açılış" error={errors.opens_at?.message}>
-            {(p) => <input {...p} type="time" step={300} {...register('opens_at')} className={inputClass} />}
+            {(p) => <select {...p} {...register('opens_at')} className={selectClass}>{hourOptions(hhmm(wh.opens_at)).map((h) => <option key={h}>{h}</option>)}</select>}
           </Field>
           <Field id={`${id}-close`} label="Kapanış" error={errors.closes_at?.message}>
-            {(p) => <input {...p} type="time" step={300} {...register('closes_at')} className={inputClass} />}
+            {(p) => <select {...p} {...register('closes_at')} className={selectClass}>{hourOptions(hhmm(wh.closes_at)).map((h) => <option key={h}>{h}</option>)}</select>}
           </Field>
           <label className="flex min-h-[2.75rem] items-center gap-2 text-sm text-muted col-span-2 lg:col-span-1">
             <input type="checkbox" {...register('has_break')} className="h-4 w-4 accent-[rgb(var(--accent))]" />
@@ -78,10 +80,10 @@ function DayRow({ wh }: { wh: WorkingHours }) {
           {hasBreak && (
             <>
               <Field id={`${id}-bs`} label="Mola başlangıcı" error={errors.break_starts_at?.message}>
-                {(p) => <input {...p} type="time" step={300} {...register('break_starts_at')} className={inputClass} />}
+                {(p) => <select {...p} {...register('break_starts_at')} className={selectClass}>{hourOptions(hhmm(wh.break_starts_at)).map((h) => <option key={h}>{h}</option>)}</select>}
               </Field>
               <Field id={`${id}-be`} label="Mola bitişi" error={errors.break_ends_at?.message}>
-                {(p) => <input {...p} type="time" step={300} {...register('break_ends_at')} className={inputClass} />}
+                {(p) => <select {...p} {...register('break_ends_at')} className={selectClass}>{hourOptions(hhmm(wh.break_ends_at)).map((h) => <option key={h}>{h}</option>)}</select>}
               </Field>
             </>
           )}
@@ -197,7 +199,7 @@ export function HoursPage() {
 
   return (
     <div>
-      <PageHeader title="Çalışma Saatleri" description="Müsait saatler doğrudan bu ayarlardan hesaplanır. Değişiklikler yeni randevulara hemen yansır; mevcut randevular değişmez." />
+      <PageHeader title="Çalışma Saatleri" description="Randevular saat başı verilir: 11:00, 12:00 gibi. Son randevu kapanıştan önce biter; son randevu 19:00 olsun istiyorsanız kapanışı 20:00 seçin. Mevcut randevular değişmez." />
 
       <section aria-labelledby="haftalik" className="mb-10">
         <h2 id="haftalik" className="mb-3 text-base">Haftalık program</h2>
