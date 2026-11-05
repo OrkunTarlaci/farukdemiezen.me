@@ -37,15 +37,15 @@ export const siteConfig = {
     photoAlt: 'Faruk Demirezen, siyah balıkçı yaka kazak ve kadife mont giymiş, kameraya bakıyor',
     headline: '13 yıl. Aynı özen.',
     years: 13,
-    intro: 'Faruk Demirezen 13 yıldır erkek kuaförlüğü yapıyor. Klasik kesimden modern stile, her işte önce sizi dinliyor; tarzınıza ve beklentinize uyanı birlikte buluyorsunuz.',
+    intro: '13 yıldır erkek kuaförlüğü yapıyorum. Klasik kesimden modern stile, her işte önce sizi dinliyorum; tarzınıza ve beklentinize uyanı birlikte buluyoruz.',
     // Doğrulanmamış unvan, ödül veya eğitim yazmayın.
     focus: [
       { title: 'Saç kesimi', text: 'Klasik ya da modern. Yüz hattınıza, saç yapınıza ve günlük düzeninize uygun bir kesim.' },
       { title: 'Sakal tasarımı', text: 'Temiz çizgiler, doğru uzunluk. Yüzünüzün oranına göre şekillenen bir sakal.' },
-      { title: 'Kişisel bakım', text: 'İyi görünümü küçük ayrıntılar tamamlar. Bitirirken her detaya özen gösterilir.' },
-      { title: 'Kişiye özel stil', text: 'Herkese aynı kesim yapılmaz. Tarzınız, işiniz ve tercihiniz neyse iş ona göre şekillenir.' },
-      { title: 'Profesyonel yaklaşım', text: 'Saatiniz size ayrılır. Acele edilmez, iş temiz ve düzenli biter.' },
-      { title: 'Müşteri memnuniyeti', text: 'Asıl ölçü aynadaki görüntü değil; koltuktan kendinizi iyi hissederek kalkmanız.' },
+      { title: 'Kişisel bakım', text: 'İyi görünümü küçük ayrıntılar tamamlar. Bitirirken her detaya özen gösteririm.' },
+      { title: 'Kişiye özel stil', text: 'Herkese aynı kesimi yapmam. Tarzınız, işiniz ve tercihiniz neyse işi ona göre şekillendiririm.' },
+      { title: 'Profesyonel yaklaşım', text: 'Saatinizi size ayırırım. Acele etmem, işi temiz ve düzenli bitiririm.' },
+      { title: 'Müşteri memnuniyeti', text: 'Benim için asıl ölçü aynadaki görüntü değil; koltuktan kendinizi iyi hissederek kalkmanız.' },
     ],
     // Hikâye bölümleri. Başlıklar değiştirilebilir, bölüm eklenip çıkarılabilir.
     // text: bir veya birkaç paragraf (her paragraf dizide ayrı bir metin).

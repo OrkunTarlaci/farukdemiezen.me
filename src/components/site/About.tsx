@@ -31,17 +31,20 @@ export function About({ businessName, contactPhone }: { businessName?: string; c
 
         <div className="mt-10 grid gap-10 md:mt-16 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:items-start md:gap-16">
           {photo && (
-            <figure className="overflow-hidden rounded-2xl bg-raised md:sticky md:top-24">
-              <img
-                src={photo}
-                alt={about.photoAlt}
-                width={1254}
-                height={1254}
-                loading="lazy"
-                decoding="async"
-                className="aspect-[4/5] w-full object-cover object-[50%_30%]"
-              />
-            </figure>
+            <div className="md:sticky md:top-24">
+              <figure className="overflow-hidden rounded-2xl bg-raised">
+                <img
+                  src={photo}
+                  alt={about.photoAlt}
+                  width={1254}
+                  height={1254}
+                  loading="lazy"
+                  decoding="async"
+                  className="aspect-[4/5] w-full object-cover object-[50%_30%]"
+                />
+              </figure>
+              <div className="mt-5"><SocialLinks contactPhone={contactPhone} iconsOnly /></div>
+            </div>
           )}
 
           <div>
@@ -79,7 +82,7 @@ export function About({ businessName, contactPhone }: { businessName?: string; c
               </blockquote>
             )}
 
-            <div className="mt-8"><SocialLinks contactPhone={contactPhone} /></div>
+            {!photo && <div className="mt-8"><SocialLinks contactPhone={contactPhone} iconsOnly /></div>}
           </div>
         </div>
       </div>

@@ -1237,6 +1237,32 @@ describe('güvenilir cihaz (0012)', () => {
   })
 })
 
+describe('dükkanı kapatma', () => {
+  it('kapalı dönem saatleri kapatır, randevuları korumadan iptal eder; açılınca saatler döner', async () => {
+    await db.exec(`update private_settings set public_queries_per_ip_per_minute = 1000`)
+    const d = futureDate(2)
+    const r = await book({ start: at(d, '11:00') })
+    const id = (await db.query<{ id: string }>('select id from appointments where reference_code=$1', [r.reference_code])).rows[0].id
+    let period = ''
+    await asRole('authenticated', ADMIN_ID, async () => {
+      period = (await db.query<{ id: string }>(
+        `insert into blocked_periods (starts_at, ends_at, reason) values (now(), $1, 'Dükkan kapatıldı') returning id`, [`${d}T23:59:00+03:00`],
+      )).rows[0].id
+      const out = (await db.query<any>('select admin_bulk_cancel($1, $2) r', [[id], 'Dükkan kapalı'])).rows[0].r
+      expect(out).toEqual([{ id, ok: true }])
+    })
+    expect(await slotsOf(d)).toEqual([])
+    await expectError(book({ start: at(d, '12:00'), phone: '0533 222 33 44' }), 'slot_unavailable')
+    const row = (await db.query<any>('select status, cancellation_reason from appointments where id=$1', [id])).rows[0]
+    expect(row).toEqual({ status: 'cancelled', cancellation_reason: 'Dükkan kapalı' })
+    await asRole('authenticated', ADMIN_ID, async () => { await db.query('delete from blocked_periods where id=$1', [period]) })
+    expect(await slotsOf(d)).toContain('11:00')
+    await asRole('authenticated', USER_ID, async () => {
+      await expectError(db.query(`insert into blocked_periods (starts_at, ends_at) values (now(), now() + interval '1 hour')`), 'row-level security')
+    })
+  })
+})
+
 describe('saat başı randevu düzeni (0015)', () => {
   const WEEKDAY_SLOTS = ['11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00']
   const SATURDAY_SLOTS = ['10:00', ...WEEKDAY_SLOTS, '20:00', '21:00']

@@ -1,6 +1,7 @@
 import { AppError, toAppError } from './errors'
 import { getSupabase } from './supabase'
-import { addDays, dayRange } from './time'
+import { selectInClosure, SHOP_CLOSED_LABEL, type ClosureRange } from './shopClose'
+import { addDays, dateOfInstant, dayRange } from './time'
 import type {
   AdminSettings, AppointmentRow, AppointmentStatus, BlockedPeriod, BookingResult, BusinessSettings, NotificationLog,
   Service, WorkingHours,
@@ -260,16 +261,41 @@ export interface CancelNotice {
   cancel_notice_opened_at: string | null
 }
 
-export async function fetchCancelNotices(date: string): Promise<CancelNotice[]> {
+export function fetchCancelNotices(date: string): Promise<CancelNotice[]> {
+  return fetchCancelNoticesBetween(dayRange(date).start, dayRange(date).end)
+}
+
+export async function fetchCancelNoticesBetween(start: string, end: string): Promise<CancelNotice[]> {
   const res = await (await client())
     .from('appointments')
     .select('id, starts_at, customer_first_name, customer_last_name, customer_phone, cancellation_reason, cancel_notice_opened_at')
     .eq('status', 'cancelled')
     .not('cancellation_reason', 'is', null)
-    .gte('starts_at', dayRange(date).start)
-    .lt('starts_at', dayRange(date).end)
+    .gte('starts_at', start)
+    .lt('starts_at', end)
     .order('starts_at')
   return unwrap(res) as CancelNotice[]
+}
+
+/** Dönemdeki açık randevuları nedeniyle iptal eder. admin_bulk_cancel en çok 200 kayıt alır. */
+export async function cancelInClosure(range: ClosureRange, reason: string): Promise<{ cancelled: number; failed: number }> {
+  const lastDay = dateOfInstant(new Date(new Date(range.ends_at).getTime() - 1))
+  const list = await fetchAppointmentsInRange(dateOfInstant(range.starts_at), lastDay)
+  const ids = selectInClosure(list, range).map((a) => a.id)
+  const out = { cancelled: 0, failed: 0 }
+  for (let i = 0; i < ids.length; i += 200) {
+    for (const r of await cancelAppointments(ids.slice(i, i + 200), reason)) {
+      if (r.ok) out.cancelled++
+      else out.failed++
+    }
+  }
+  return out
+}
+
+/** Önce yeni randevuyu durdurur, sonra listeyi okur: arada alınan randevu da iptal listesine girer. */
+export async function closeShop(range: ClosureRange, reason: string): Promise<{ cancelled: number; failed: number }> {
+  await createBlockedPeriod({ ...range, reason: SHOP_CLOSED_LABEL })
+  return cancelInClosure(range, reason)
 }
 
 /** "WhatsApp sohbeti açıldı" işaretini veritabanına yazar (her cihazda görünür). */

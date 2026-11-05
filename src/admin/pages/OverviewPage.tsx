@@ -16,6 +16,7 @@ import { AppointmentDialog } from '../AppointmentDialog'
 import { MoneyStat, PageHeader, StatCard } from '../AdminLayout'
 import { ContactActions } from '../ContactActions'
 import { PushCard } from '../PushCard'
+import { ShopCloseCard } from '../ShopCloseCard'
 import { STATUS_LABELS, STATUS_TEXT, StatusBadge, TestBadge } from '../StatusBadge'
 
 const UPCOMING_DAYS = 30
@@ -122,6 +123,7 @@ export function OverviewPage() {
       {!data.data && data.loading && <Spinner label="Özet yükleniyor…" />}
 
       <PushCard hideWhenOn />
+      <ShopCloseCard onChanged={data.reload} />
 
       {actionError && <div className="mb-4"><ErrorPanel message={actionError} /></div>}
 
