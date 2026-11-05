@@ -22,5 +22,5 @@ export const previewServices: Service[] = [
 ]
 
 export const previewWorkingHours: WorkingHours[] = [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({
-  weekday, is_closed: weekday === 7, opens_at: '10:00:00', closes_at: '19:00:00', break_starts_at: null, break_ends_at: null,
+  weekday, is_closed: weekday === 7, opens_at: '09:00:00', closes_at: '20:00:00', break_starts_at: null, break_ends_at: null,
 }))

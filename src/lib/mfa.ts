@@ -72,7 +72,9 @@ export async function startEnroll(): Promise<{ factorId: string; qrCode: string;
   return { factorId: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret }
 }
 
-export async function removeFactor(factorId: string): Promise<void> {
-  const { error } = await (await auth()).mfa.unenroll({ factorId })
-  if (error) throw error
+/** Kullanıcı yöneticiler listesinde mi? Yetki vermez; yalnızca iki adımlı kurulum ekranı için (0014). */
+export async function isAdminMember(): Promise<boolean> {
+  const supabase = await getSupabase()
+  const res = await supabase?.rpc('is_admin_member')
+  return res?.data === true
 }

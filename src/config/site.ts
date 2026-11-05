@@ -25,7 +25,7 @@ export const siteConfig = {
     // Onaylı bir fotoğraf eklendiğinde buraya tam URL veya /public altındaki yolu yazın (örn. 'images/hero.jpg').
     // null ise sade bir çizim gösterilir.
     imageUrl: null as string | null,
-    imageAlt: 'Berber amblemi: berber direği, makas ve ustura',
+    imageAlt: 'Faruk Demirezen Erkek Kuaförü logosu: berber direği, makas ve ustura',
   },
 
   // "Faruk Demirezen kimdir" bölümü. METİNLER FARUK BEY'İN KENDİ ANLATIMIYLA DOLDURULACAK.
@@ -37,8 +37,16 @@ export const siteConfig = {
     // Fotoğraf: public/images altındaki dosya. null yapılırsa fotoğraf gösterilmez.
     photoUrl: 'images/faruk-demirezen.jpg' as string | null,
     photoAlt: 'Faruk Demirezen, siyah balıkçı yaka kazak ve kadife mont giymiş, kameraya bakıyor',
-    // Başlığın altındaki tek cümlelik tanıtım. Örn. "Kendini tanıtan bir cümle."
-    intro: '13 yıldır bu işte.' as string | null,
+    headline: '13 yıl. Aynı özen.',
+    years: 13,
+    intro: 'Faruk Demirezen 13 yıldır erkek kuaförlüğü yapıyor. Klasik kesimden modern stile, her işte önce sizi dinliyor; tarzınıza ve beklentinize uyanı birlikte buluyorsunuz.',
+    // Doğrulanmamış unvan, ödül veya eğitim yazmayın.
+    focus: [
+      { title: 'Saç kesimi', text: 'Klasik ya da modern. Yüz hattınıza, saç yapınıza ve günlük düzeninize uygun bir kesim.' },
+      { title: 'Sakal tasarımı', text: 'Temiz çizgiler, doğru uzunluk. Yüzünüzün oranına göre şekillenen bir sakal.' },
+      { title: 'Kişisel bakım', text: 'İyi görünümü küçük ayrıntılar tamamlar. Bitirirken her detaya özen gösterilir.' },
+      { title: 'Müşteri memnuniyeti', text: 'Asıl ölçü aynadaki görüntü değil; koltuktan kendinizi iyi hissederek kalkmanız.' },
+    ],
     // Hikâye bölümleri. Başlıklar değiştirilebilir, bölüm eklenip çıkarılabilir.
     // text: bir veya birkaç paragraf (her paragraf dizide ayrı bir metin).
     story: [
@@ -56,15 +64,6 @@ export const siteConfig = {
         title: 'Neden bu işi yapıyor',
         hint: 'Bu mesleği neden seviyor, işin hangi yanı onun için önemli.',
         text: null as string[] | null,
-      },
-      {
-        title: 'Çalışma anlayışı',
-        hint: 'Müşteriye nasıl yaklaşır, işinde neye dikkat eder.',
-        text: [
-          'Berberlik bizim için yalnızca saç kesiminden ibaret değil; özen, dikkat ve emeğin bir araya geldiği bir meslek.',
-          'The Man’s Barber Shop olarak amacımız, her müşterimizin tarzına, beklentilerine ve kişisel tercihine uygun hizmet sunmak. Klasik kesimlerden modern saç stillerine kadar her uygulamada detaylara önem veriyor, işimizi özenle ve titizlikle yapıyoruz.',
-          'Bizim için önemli olan yalnızca iyi bir görünüm oluşturmak değil, müşterilerimizin kendilerini iyi hissetmelerini sağlamak.',
-        ] as string[] | null,
       },
     ],
     // İsteğe bağlı kısa alıntı ve altında görünecek ad (null ise işletme adı yazılır).

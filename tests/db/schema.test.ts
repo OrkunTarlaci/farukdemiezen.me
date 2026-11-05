@@ -1236,6 +1236,156 @@ describe('güvenilir cihaz (0012)', () => {
   })
 })
 
+describe('çalışma saatleri 09:00–20:00 (0013)', () => {
+  const apply = async () => {
+    await db.exec(`update business_settings set booking_interval_minutes = 60`)
+    await db.exec(sql('migrations/0013_working_hours_0900_2000.sql'))
+    await db.exec(`update private_settings set public_queries_per_ip_per_minute = 1000`)
+  }
+
+  it('ilk saat 09:00, 30 dakika arayla, son saat hizmet süresine göre', async () => {
+    await apply()
+    for (const weekday of [1, 6]) {
+      const d = futureDate(weekday)
+      const s = await slotsOf(d)
+      expect(s[0]).toBe('09:00')
+      expect(s[1]).toBe('09:30')
+      expect(s.at(-1)).toBe('19:30') // 30 dk: 20:00'da biter
+      expect(s).toHaveLength(22)
+      const long = await slotsOf(d, 'Saç + Sakal')
+      expect(long.at(-1)).toBe('19:00') // 50 dk: 19:30 kapanışı aşar
+    }
+  })
+
+  it('20:00 kapanışını aşan ve 09:00 öncesi randevu reddedilir', async () => {
+    await apply()
+    const d = futureDate(2)
+    await expectError(book({ service: 'Saç + Sakal', start: at(d, '19:30') }), 'slot_invalid')
+    await expectError(book({ start: at(d, '08:30') }), 'slot_invalid')
+    await expectError(book({ start: at(d, '09:15') }), 'slot_invalid')
+    expect((await book({ start: at(d, '19:30') })).reference_code).toBeTruthy()
+  })
+
+  it('Pazar kapalı kalır; kapalı olan başka gün de açılmaz', async () => {
+    await db.exec('update working_hours set is_closed = true where weekday = 3')
+    await apply()
+    expect(await slotsOf(futureDate(7))).toEqual([])
+    expect(await slotsOf(futureDate(3))).toEqual([])
+    const rows = (await db.query<any>('select weekday, opens_at from working_hours where is_closed order by weekday')).rows
+    expect(rows.map((r: any) => r.opens_at.slice(0, 5))).toEqual(['10:00', '10:00'])
+  })
+
+  it('eski randevular değişmez, çakışma kontrolü sürer', async () => {
+    const d = futureDate(4)
+    const r = await book({ start: at(d, '10:30') })
+    const before = (await db.query<any>('select starts_at, ends_at, status from appointments where reference_code=$1', [r.reference_code])).rows[0]
+    await apply()
+    expect((await db.query<any>('select starts_at, ends_at, status from appointments where reference_code=$1', [r.reference_code])).rows[0]).toEqual(before)
+    const s = await slotsOf(d)
+    expect(s).not.toContain('10:30')
+    expect(s).toContain('11:00')
+    await expectError(book({ start: at(d, '10:30'), phone: '0533 222 33 44' }), 'slot_unavailable')
+  })
+})
+
+describe('iki tam yetkili yönetici ve zorunlu iki adımlı giriş (0014)', () => {
+  const SECOND = '33333333-3333-3333-3333-333333333333'
+  const addSql = (email: string) => sql('admin/add_admin.sql').replaceAll('YENI_YONETICI_EPOSTA', email)
+  const now = () => Math.floor(Date.now() / 1000)
+  const aal = async (level: string | null) => {
+    await db.query(`select set_config('request.jwt.claims', $1, false)`, [level ? JSON.stringify({ aal: level, amr: [{ method: 'totp', timestamp: now() }] }) : ''])
+  }
+  const prepare = async () => {
+    await db.query(`insert into auth.users values ($1, 'ikinci@example.com')`, [SECOND])
+    await db.exec(addSql('ikinci@example.com'))
+    await db.exec(sql('migrations/0014_require_admin_mfa.sql'))
+  }
+
+  it('yeni yöneticiyi ekler, mevcut yöneticiyi korur, tekrar çalışınca çoğaltmaz', async () => {
+    await prepare()
+    await db.exec(addSql('IKINCI@example.com'))
+    const ids = (await db.query<any>('select user_id from admin_users order by user_id')).rows.map((r: any) => r.user_id)
+    expect(ids).toEqual([ADMIN_ID, SECOND])
+  })
+
+  it('kullanıcı Auth içinde yoksa hiçbir şey yapmaz', async () => {
+    await expect(db.exec(addSql('yok@example.com'))).rejects.toThrow('Önce davet')
+    expect((await db.query('select * from admin_users')).rows).toHaveLength(1)
+  })
+
+  it('iki yönetici aal2 ile aynı işlemleri yapar', async () => {
+    await prepare()
+    const d = futureDate(2)
+    for (const [i, admin] of [ADMIN_ID, SECOND].entries()) {
+      const r = await book({ start: at(d, `1${i + 1}:00`), phone: `0532 111 22 3${i}` })
+      const r2 = await book({ start: at(d, `1${i + 3}:00`), phone: `0532 111 22 4${i}` })
+      const id = async (c: string) => (await db.query<{ id: string }>('select id from appointments where reference_code=$1', [c])).rows[0].id
+      const a = await id(r.reference_code)
+      const b = await id(r2.reference_code)
+      await aal('aal2')
+      await asRole('authenticated', admin, async () => {
+        expect((await db.query<{ a: boolean }>('select is_admin() a')).rows[0].a).toBe(true)
+        expect((await db.query('select customer_phone from appointments')).rows.length).toBeGreaterThan(0)
+        await db.query(`select admin_set_appointment_status($1,'confirmed')`, [a])
+        await db.query(`select admin_set_appointment_status($1,'cancelled')`, [a])
+        expect((await db.query<any>(`select admin_bulk_cancel(array[$1]::uuid[], 'neden') r`, [b])).rows[0].r[0].ok).toBe(true)
+        expect((await db.query(`update services set price_minor = $1 where name = 'Saç Kesimi'`, [70000 + i])).affectedRows).toBe(1)
+        expect((await db.query(`update working_hours set closes_at = '19:30' where weekday = 5`)).affectedRows).toBe(1)
+        expect((await db.query(`update business_settings set address = $1`, [`Adres ${i}`])).affectedRows).toBe(1)
+        await db.query(`select admin_save_push_subscription($1)`, [`https://fcm.googleapis.com/fcm/send/${i}`])
+        await db.query('select admin_cleanup_status()')
+        await db.query('select * from notification_logs')
+        expect((await db.query<any>('select trust_this_device() r')).rows[0].r.token).toBeTruthy()
+      })
+      await aal(null)
+    }
+    expect((await db.query<any>('select count(distinct user_id)::int n from push_subscriptions')).rows[0].n).toBe(2)
+  })
+
+  it('iki yönetici için de iki adım zorunlu: yalnızca parolayla yönetici değil', async () => {
+    await prepare()
+    for (const admin of [ADMIN_ID, SECOND]) {
+      await aal('aal1')
+      await asRole('authenticated', admin, async () => {
+        expect((await db.query<{ a: boolean }>('select is_admin() a')).rows[0].a).toBe(false)
+        expect((await db.query<{ a: boolean }>('select is_admin_member() a')).rows[0].a).toBe(true) // kurulum ekranı için
+        await expectError(db.query(`select admin_run_cleanup()`), 'forbidden')
+        expect((await db.query('select * from appointments')).rows).toHaveLength(0)
+      })
+      await aal(null)
+    }
+  })
+
+  it('güvenilir cihaz yöneticiye özeldir, diğer yöneticiye geçmez', async () => {
+    await prepare()
+    await aal('aal2')
+    let token = ''
+    await asRole('authenticated', ADMIN_ID, async () => { token = (await db.query<any>('select trust_this_device() r')).rows[0].r.token })
+    await aal('aal1')
+    await db.query(`select set_config('request.headers', $1, false)`, [JSON.stringify({ 'x-device-token': token })])
+    const check = async (u: string) => {
+      let ok = false
+      await asRole('authenticated', u, async () => { ok = (await db.query<{ a: boolean }>('select is_admin() a')).rows[0].a })
+      return ok
+    }
+    expect(await check(ADMIN_ID)).toBe(true)
+    expect(await check(SECOND)).toBe(false)
+    await db.query(`select set_config('request.headers', '', false)`)
+    await aal(null)
+  })
+
+  it('normal kullanıcı yönetici değil; üye kontrolü yetki vermez, anon çağıramaz', async () => {
+    await prepare()
+    await aal('aal2')
+    await asRole('authenticated', USER_ID, async () => {
+      expect((await db.query<{ a: boolean }>('select is_admin() a')).rows[0].a).toBe(false)
+      expect((await db.query<{ a: boolean }>('select is_admin_member() a')).rows[0].a).toBe(false)
+    })
+    await aal(null)
+    await asRole('anon', null, async () => { await expectError(db.query('select is_admin_member()'), 'permission denied') })
+  })
+})
+
 describe('günlük randevu temizliği (0007)', () => {
   // Sabit "şimdi": 15 Haziran 2030 09:00 İstanbul. Testler gerçek saatten bağımsızdır.
   const NOW = '2030-06-15T09:00:00+03:00'

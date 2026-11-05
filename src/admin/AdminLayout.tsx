@@ -103,7 +103,7 @@ export function AdminLayout({ email, onSignOut }: Props) {
       {/* Masaüstü kenar çubuğu */}
       <aside className="hidden border-r border-line bg-surface/60 lg:flex lg:min-h-screen lg:flex-col">
         <div className="flex h-16 items-center gap-3 border-b border-line px-5">
-          <Monogram className="h-8 w-8" />
+          <Monogram className="h-11 w-11" />
           <span className="text-sm font-semibold">Yönetim Paneli</span>
         </div>
         <nav aria-label="Yönetim menüsü" className="flex-1 space-y-1 p-3">

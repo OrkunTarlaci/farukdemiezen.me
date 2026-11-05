@@ -6,6 +6,7 @@ import '@fontsource/inter/500.css'
 import '@fontsource/inter/600.css'
 import '@fontsource/inter/700.css'
 import App from './App'
+import { captureAuthLink } from './lib/authLink'
 import './index.css'
 
 // Kısa yönetici adresi: "#admin" (ve "#admin/...") HashRouter'ın beklediği "#/admin" biçimine çevrilir.
@@ -16,6 +17,7 @@ function normalizeAdminHash() {
     window.history.replaceState(window.history.state, '', `#/${hash.slice(1)}`)
   }
 }
+captureAuthLink()
 normalizeAdminHash()
 window.addEventListener('hashchange', normalizeAdminHash)
 

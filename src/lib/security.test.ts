@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseAuthHash } from './authLink'
 import { sendsDeviceHeader } from './deviceToken'
 import { IDLE_LIMIT_MS, isIdleExpired } from './idle'
 import { needsMfaStep } from './mfa'
@@ -20,6 +21,19 @@ describe('güvenilir cihaz başlığı', () => {
     expect(sendsDeviceHeader(`${b}/auth/v1/token`)).toBe(false)
     expect(sendsDeviceHeader(`${b}/functions/v1/create-booking`)).toBe(false)
     expect(sendsDeviceHeader('https://kotu.test/x')).toBe(false)
+  })
+})
+
+describe('davet bağlantısı', () => {
+  it('yalnızca davet ve sıfırlama bağlantısını kabul eder', () => {
+    const t = 'access_token=a&refresh_token=b'
+    expect(parseAuthHash(`#${t}&type=invite`)).toEqual({ kind: 'session', accessToken: 'a', refreshToken: 'b' })
+    expect(parseAuthHash(`#${t}&type=recovery`)).toEqual({ kind: 'session', accessToken: 'a', refreshToken: 'b' })
+    expect(parseAuthHash(`#${t}&type=magiclink`)).toBeNull()
+    expect(parseAuthHash('#access_token=a&type=invite')).toBeNull()
+    expect(parseAuthHash('#/admin')).toBeNull()
+    expect(parseAuthHash('')).toBeNull()
+    expect(parseAuthHash('#error=access_denied&error_code=otp_expired')).toEqual({ kind: 'error' })
   })
 })
 

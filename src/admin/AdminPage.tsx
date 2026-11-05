@@ -6,7 +6,9 @@ import { Monogram } from '../components/ui/Logo'
 import { AdminLayout } from './AdminLayout'
 import { OverviewPage } from './pages/OverviewPage'
 import { LoginForm } from './LoginForm'
+import { MfaCard } from './MfaCard'
 import { MfaForm } from './MfaForm'
+import { SetPasswordForm } from './SetPasswordForm'
 import { useAuth } from './useAuth'
 
 // Formlu sayfalar (zod) ayrı parçalarda yüklenir.
@@ -20,7 +22,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ de
 
 /** /admin — kimlik doğrulama kapısı. Veri koruması arayüzde değil, RLS'tedir; bu yalnızca deneyim katmanıdır. */
 export function AdminPage() {
-  const { state, signIn, signOut, verifyMfa } = useAuth()
+  const { state, signIn, signOut, verifyMfa, setPassword, recheck } = useAuth()
 
   if (state.status === 'admin') {
     return (
@@ -45,7 +47,7 @@ export function AdminPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
       <div className="mb-8 flex flex-col items-center gap-3">
-        <Monogram className="h-12 w-12" />
+        <Monogram className="h-24 w-24" />
         <p className="text-xs font-medium uppercase tracking-[0.28em] text-muted">Yönetim Paneli</p>
       </div>
 
@@ -58,6 +60,16 @@ export function AdminPage() {
       )}
 
       {state.status === 'signedOut' && <LoginForm onSignIn={signIn} />}
+
+      {state.status === 'setPassword' && <SetPasswordForm onSave={setPassword} />}
+
+      {state.status === 'mfaSetup' && (
+        <div className="w-full max-w-md">
+          <p className="mb-4 text-center text-sm text-muted">Panele girmeden önce iki adımlı girişi açmanız gerekiyor.</p>
+          <MfaCard onEnabled={() => { void recheck() }} />
+          <Button variant="ghost" className="w-full" onClick={() => { void signOut() }}>Çıkış yap</Button>
+        </div>
+      )}
 
       {state.status === 'mfa' && <MfaForm onVerify={verifyMfa} onCancel={() => { void signOut() }} />}
 

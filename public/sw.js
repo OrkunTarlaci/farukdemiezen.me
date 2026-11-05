@@ -7,7 +7,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification('Yeni randevu', {
     body: 'Yeni randevunuz var, sistemden onaylayın.',
     icon: 'icons/icon-192.png',
-    badge: 'icons/icon-192.png',
+    badge: 'icons/badge-96.png',
     data: { url: new URL('./#/admin', self.registration.scope).href },
   }))
 })

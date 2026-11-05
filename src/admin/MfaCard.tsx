@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { ErrorPanel } from '../components/ui/feedback'
 import { inputClass } from '../components/ui/Field'
-import { removeFactor, revokeTrustedDevices, startEnroll, trustThisDevice, verifiedFactorId, verifyCode } from '../lib/mfa'
+import { revokeTrustedDevices, startEnroll, trustThisDevice, verifiedFactorId, verifyCode } from '../lib/mfa'
 
 type Setup = { factorId: string; qrCode: string; secret: string }
 
-/** İki adımlı girişi açma ve kapatma. Kod, Google Authenticator gibi ücretsiz bir uygulamadan gelir. */
-export function MfaCard() {
+/** İki adımlı girişi kurma. Yöneticiler için zorunludur, bu yüzden kapatma düğmesi yoktur. Kod, Google Authenticator gibi ücretsiz bir uygulamadan gelir. */
+export function MfaCard({ onEnabled }: { onEnabled?: () => void }) {
   const [factorId, setFactorId] = useState<string | null | undefined>(undefined)
   const [setup, setSetup] = useState<Setup | null>(null)
   const [code, setCode] = useState('')
@@ -29,11 +29,8 @@ export function MfaCard() {
     await verifyCode(setup.factorId, code.trim())
     await trustThisDevice().catch(() => undefined)
     setFactorId(setup.factorId); setSetup(null); setCode('')
+    onEnabled?.()
   }, 'Kod yanlış veya süresi doldu. Uygulamadaki yeni kodu yazın.')
-  const remove = () => run(async () => {
-    if (factorId) await removeFactor(factorId)
-    setFactorId(null)
-  }, 'Kapatılamadı. Çıkış yapıp kodla yeniden girin, sonra tekrar deneyin.')
 
   const forget = () => run(async () => {
     await revokeTrustedDevices()
@@ -54,7 +51,6 @@ export function MfaCard() {
           <p className="mt-1 text-sm text-muted">Açık. Kod her cihazda günde bir kez istenir; gece 00.00'da yenilenir.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="secondary" disabled={busy} onClick={forget}>Cihazları Sıfırla</Button>
-            <Button variant="ghost" loading={busy} onClick={remove}>Kapat</Button>
           </div>
           <p className="mt-2 text-xs text-muted">Telefon kaybolursa Cihazları Sıfırla'ya basın ve parolanızı değiştirin.</p>
         </>
@@ -63,7 +59,7 @@ export function MfaCard() {
       {!factorId && !setup && (
         <>
           <p className="mt-1 text-sm text-muted">Parolanız çalınsa bile panele girilemesin. Telefona Google Authenticator gibi ücretsiz bir uygulama kurun.</p>
-          <Button className="mt-3 w-full sm:w-auto" loading={busy} onClick={begin}>Aç</Button>
+          <Button className="mt-3 w-full sm:w-auto" loading={busy} onClick={begin}>Kurulumu Başlat</Button>
         </>
       )}
 
