@@ -6,6 +6,7 @@ import { Monogram } from '../components/ui/Logo'
 import { AdminLayout } from './AdminLayout'
 import { OverviewPage } from './pages/OverviewPage'
 import { LoginForm } from './LoginForm'
+import { MfaForm } from './MfaForm'
 import { useAuth } from './useAuth'
 
 // Formlu sayfalar (zod) ayrı parçalarda yüklenir.
@@ -19,13 +20,13 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ de
 
 /** /admin — kimlik doğrulama kapısı. Veri koruması arayüzde değil, RLS'tedir; bu yalnızca deneyim katmanıdır. */
 export function AdminPage() {
-  const { state, signIn, signOut } = useAuth()
+  const { state, signIn, signOut, verifyMfa } = useAuth()
 
   if (state.status === 'admin') {
     return (
       <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Spinner /></div>}>
         <Routes>
-          <Route element={<AdminLayout email={state.email} onSignOut={signOut} />}>
+          <Route element={<AdminLayout email={state.email} onSignOut={() => { void signOut() }} />}>
             <Route index element={<OverviewPage />} />
             <Route path="gun" element={<DayPage />} />
             <Route path="takvim" element={<WeekPage />} />
@@ -58,17 +59,19 @@ export function AdminPage() {
 
       {state.status === 'signedOut' && <LoginForm onSignIn={signIn} />}
 
+      {state.status === 'mfa' && <MfaForm onVerify={verifyMfa} onCancel={() => { void signOut() }} />}
+
       {state.status === 'notAdmin' && (
         <div className="max-w-md space-y-4">
           <ErrorPanel message="Bu hesabın yönetici yetkisi yok." />
-          <Button variant="secondary" onClick={signOut}>Çıkış yap</Button>
+          <Button variant="secondary" onClick={() => { void signOut() }}>Çıkış yap</Button>
         </div>
       )}
 
       {state.status === 'error' && (
         <div className="max-w-md space-y-4">
           <ErrorPanel message={state.message} />
-          <Button variant="secondary" onClick={signOut}>Çıkış yap</Button>
+          <Button variant="secondary" onClick={() => { void signOut() }}>Çıkış yap</Button>
         </div>
       )}
 

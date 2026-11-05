@@ -19,8 +19,8 @@ const publicKey = resolvePublicKey(env)
 const allowedOrigins = parseList(env('ALLOWED_ORIGINS'))
 const log = (event: Record<string, unknown>) => console.log(JSON.stringify({ fn: 'send-notifications', ...event }))
 
-if (!url || !serverKey || !publicKey) {
-  log({ status: 503, code: 'server_not_configured', hint: 'SUPABASE_URL veya Supabase anahtarları bulunamadı' })
+if (!url || !serverKey || !publicKey || allowedOrigins.length === 0) {
+  log({ status: 503, code: 'server_not_configured', hint: 'SUPABASE_URL, Supabase anahtarları veya ALLOWED_ORIGINS bulunamadı' })
   Deno.serve((req) => misconfiguredResponse(req, allowedOrigins, 'server_not_configured'))
 } else {
   log({ status: 0, code: 'started', key_source: serverKey.source, public_key_source: publicKey.source })

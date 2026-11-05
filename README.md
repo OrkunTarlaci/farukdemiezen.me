@@ -191,6 +191,14 @@ Cloudflare'in test anahtarları (`1x000…AA`) da kullanılabilir ama gizli test
 
 `SUPABASE_URL` ve Supabase anahtarları otomatik sağlanır; elle girmeyin. Fonksiyonlar önce yeni anahtar sistemini (`SUPABASE_SECRET_KEYS`, `SUPABASE_PUBLISHABLE_KEYS`), yoksa eski anahtarları (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`) kullanır; Supabase eski anahtarları kullanımdan kaldırsa da çalışmaya devam eder. Hiçbiri bulunamazsa fonksiyon `server_not_configured` hatası döner ve Logs'a nedenini yazar (anahtarın kendisi yazılmaz).
 
+### Güvenlik sertleştirmesi (0011)
+
+`supabase/migrations/0011_security_hardening.sql` SQL Editor'de bir kez çalıştırılır. İki adımlı girişi açmış yöneticiden sunucuda da `aal2` ister; açmamış yönetici etkilenmez. Telefon kaybolursa: Dashboard → Authentication → Users → kullanıcı → MFA factor silinir. Yönetici değişiklikleri `admin_audit_log` tablosunda 180 gün tutulur (yalnızca SQL Editor'den okunur).
+
+`ALLOWED_ORIGINS` ve `TURNSTILE_ALLOWED_HOSTNAMES` zorunludur; boşsa `create-booking` randevu kabul etmez.
+
+CSP, GitHub Pages başlık ekleyemediği için `vite.config.ts` içinde meta etiketiyle üretilir. `frame-ancestors` ve `X-Content-Type-Options` meta ile verilemez; tam başlıklar için DNS Cloudflare proxy'sinden geçirilmelidir.
+
 ### Telefon bildirimi (yeni randevu)
 
 Yeni randevu gelince yöneticinin telefonuna "Yeni randevunuz var, sistemden onaylayın." bildirimi gider. Ücretsizdir (Web Push). Bildirim boş gönderilir, metin `public/sw.js` içindedir; müşteri bilgisi bildirim servislerine gitmez.

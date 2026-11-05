@@ -1,8 +1,8 @@
 // Supabase Edge Function (Deno): Turnstile doğrulamalı rezervasyon.
 // Gizli değerler yalnızca Supabase Function Secrets'tan okunur; ön yüzde hiçbiri yoktur.
 //   TURNSTILE_SECRET_KEY        — Cloudflare Turnstile gizli anahtarı (zorunlu)
-//   ALLOWED_ORIGINS             — örn. "https://orkuntarlaci.github.io,http://localhost:5173" (virgülle ayrılmış, önerilir)
-//   TURNSTILE_ALLOWED_HOSTNAMES — örn. "orkuntarlaci.github.io,localhost" (virgülle ayrılmış, önerilir)
+//   ALLOWED_ORIGINS             — örn. "https://www.orkuntarlaci.me" (virgülle ayrılmış, zorunlu)
+//   TURNSTILE_ALLOWED_HOSTNAMES — örn. "orkuntarlaci.me,www.orkuntarlaci.me" (virgülle ayrılmış, zorunlu)
 //   TEST_HOSTNAMES              — isteğe bağlı; varsayılan "localhost,127.0.0.1". Bu hostname'lerden
 //                                  gelen rezervasyonlar test olarak işaretlenir.
 //   SMS_PROVIDER                — isteğe bağlı; şimdilik "none" (SMS gönderilmez, kuyrukta "atlandı" görünür)
@@ -24,11 +24,16 @@ const env = (name: string) => Deno.env.get(name)
 const url = env('SUPABASE_URL') ?? ''
 const serverKey = resolveServerKey(env)
 const allowedOrigins = parseList(env('ALLOWED_ORIGINS'))
+const allowedHostnames = parseList(env('TURNSTILE_ALLOWED_HOSTNAMES'))
 // Kişisel veri veya anahtar içermez: yalnızca durum kodu ve hata kodu (Supabase → Edge Functions → Logs).
 const log = (event: Record<string, unknown>) => console.log(JSON.stringify({ fn: 'create-booking', ...event }))
 
 if (!url || !serverKey) {
   log({ status: 503, code: 'server_not_configured', hint: 'SUPABASE_URL veya sunucu anahtarı (SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY) bulunamadı' })
+  Deno.serve((req) => misconfiguredResponse(req, allowedOrigins, 'server_not_configured'))
+} else if (allowedOrigins.length === 0 || allowedHostnames.length === 0) {
+  // Boş liste "herkese açık" anlamına gelmesin: secret silinirse koruma sessizce kalkmaz.
+  log({ status: 503, code: 'server_not_configured', hint: 'ALLOWED_ORIGINS veya TURNSTILE_ALLOWED_HOSTNAMES tanımlı değil' })
   Deno.serve((req) => misconfiguredResponse(req, allowedOrigins, 'server_not_configured'))
 } else {
   log({ status: 0, code: 'started', key_source: serverKey.source })
@@ -71,7 +76,7 @@ if (!url || !serverKey) {
         return { data, error: error ? { message: error.message } : null }
       },
       allowedOrigins,
-      allowedHostnames: parseList(env('TURNSTILE_ALLOWED_HOSTNAMES')),
+      allowedHostnames,
       testHostnames: testHostnames.length ? testHostnames : DEFAULT_TEST_HOSTNAMES,
       // SMS ve telefon bildirimi, yanıtı geciktirmemek için arka planda gönderilir; hataları randevuyu etkilemez.
       afterBooking: async (appointmentId) => {

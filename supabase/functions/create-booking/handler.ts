@@ -131,6 +131,28 @@ export async function verifyTurnstileWithCloudflare(
   return (await res.json()) as TurnstileResult
 }
 
+/** Gövdeyi parça parça okur; sınırı aşınca belleğe almayı keser ve null döner. */
+async function readLimited(req: Request, max: number): Promise<string | null> {
+  const reader = req.body?.getReader()
+  if (!reader) return ''
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.length
+    if (size > max) {
+      await reader.cancel()
+      return null
+    }
+    chunks.push(value)
+  }
+  const all = new Uint8Array(size)
+  let offset = 0
+  for (const c of chunks) { all.set(c, offset); offset += c.length }
+  return new TextDecoder().decode(all)
+}
+
 export async function handleRequest(req: Request, deps: Deps): Promise<Response> {
   const origin = req.headers.get('origin')
   const cors = corsHeaders(origin, deps.allowedOrigins)
@@ -147,8 +169,8 @@ export async function handleRequest(req: Request, deps: Deps): Promise<Response>
 
   const declared = Number(req.headers.get('content-length') ?? '0')
   if (declared > MAX_BODY_BYTES) return fail(413, 'invalid_request')
-  const raw = await req.text()
-  if (raw.length > MAX_BODY_BYTES) return fail(413, 'invalid_request')
+  const raw = await readLimited(req, MAX_BODY_BYTES)
+  if (raw === null) return fail(413, 'invalid_request')
   let body: unknown
   try { body = JSON.parse(raw) } catch { return fail(400, 'invalid_request') }
 

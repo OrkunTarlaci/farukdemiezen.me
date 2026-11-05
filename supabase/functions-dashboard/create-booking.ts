@@ -121,6 +121,7 @@ async function processNotifications(deps, appointmentId) {
 // supabase/functions/_shared/notificationDeps.ts
 function selectProvider(name) {
   switch ((name ?? "none").toLowerCase()) {
+    // Sağlayıcı seçimi için işletmenin onayı bekleniyor (README, "SMS bildirimleri").
     default:
       return disabledProvider;
   }
@@ -167,6 +168,16 @@ function createNotificationDeps(admin, provider) {
 // supabase/functions/_shared/push.ts
 var SUBJECT = "https://www.orkuntarlaci.me";
 var TOKEN_SECONDS = 12 * 60 * 60;
+var SEND_TIMEOUT_MS = 5e3;
+var PUSH_HOSTS = /^(fcm\.googleapis\.com|[a-z0-9.-]+\.push\.apple\.com|[a-z0-9.-]+\.notify\.windows\.com|[a-z0-9.-]+\.push\.services\.mozilla\.com)$/;
+function isPushEndpoint(endpoint) {
+  try {
+    const url2 = new URL(endpoint);
+    return url2.protocol === "https:" && PUSH_HOSTS.test(url2.hostname);
+  } catch {
+    return false;
+  }
+}
 var toB64Url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 function fromB64Url(s) {
   const raw = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4));
@@ -206,8 +217,14 @@ async function notifyNewBooking(deps) {
   const summary = { sent: 0, removed: 0, failed: 0 };
   for (const endpoint of await deps.listEndpoints()) {
     try {
+      if (!isPushEndpoint(endpoint)) {
+        await deps.removeEndpoint(endpoint);
+        summary.removed++;
+        continue;
+      }
       const res = await send(endpoint, {
         method: "POST",
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         headers: { Authorization: await vapidAuthorization(endpoint, deps.keys, now), TTL: "86400", Urgency: "high", "Content-Length": "0" }
       });
       if (res.ok) summary.sent++;
@@ -274,6 +291,29 @@ async function verifyTurnstileWithCloudflare(secret, token, remoteIp, fetchImpl 
   if (!res.ok) throw new Error(`siteverify HTTP ${res.status}`);
   return await res.json();
 }
+async function readLimited(req, max) {
+  const reader = req.body?.getReader();
+  if (!reader) return "";
+  const chunks = [];
+  let size = 0;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    all.set(c, offset);
+    offset += c.length;
+  }
+  return new TextDecoder().decode(all);
+}
 async function handleRequest(req, deps) {
   const origin = req.headers.get("origin");
   const cors = corsHeaders(origin, deps.allowedOrigins);
@@ -290,8 +330,8 @@ async function handleRequest(req, deps) {
   if (!deps.captchaConfigured) return fail(503, "captcha_not_configured");
   const declared = Number(req.headers.get("content-length") ?? "0");
   if (declared > MAX_BODY_BYTES) return fail(413, "invalid_request");
-  const raw = await req.text();
-  if (raw.length > MAX_BODY_BYTES) return fail(413, "invalid_request");
+  const raw = await readLimited(req, MAX_BODY_BYTES);
+  if (raw === null) return fail(413, "invalid_request");
   let body;
   try {
     body = JSON.parse(raw);
@@ -354,9 +394,13 @@ var env = (name) => Deno.env.get(name);
 var url = env("SUPABASE_URL") ?? "";
 var serverKey = resolveServerKey(env);
 var allowedOrigins = parseList(env("ALLOWED_ORIGINS"));
+var allowedHostnames = parseList(env("TURNSTILE_ALLOWED_HOSTNAMES"));
 var log = (event) => console.log(JSON.stringify({ fn: "create-booking", ...event }));
 if (!url || !serverKey) {
   log({ status: 503, code: "server_not_configured", hint: "SUPABASE_URL veya sunucu anahtarı (SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY) bulunamadı" });
+  Deno.serve((req) => misconfiguredResponse(req, allowedOrigins, "server_not_configured"));
+} else if (allowedOrigins.length === 0 || allowedHostnames.length === 0) {
+  log({ status: 503, code: "server_not_configured", hint: "ALLOWED_ORIGINS veya TURNSTILE_ALLOWED_HOSTNAMES tanımlı değil" });
   Deno.serve((req) => misconfiguredResponse(req, allowedOrigins, "server_not_configured"));
 } else {
   log({ status: 0, code: "started", key_source: serverKey.source });
@@ -399,7 +443,7 @@ if (!url || !serverKey) {
         return { data, error: error ? { message: error.message } : null };
       },
       allowedOrigins,
-      allowedHostnames: parseList(env("TURNSTILE_ALLOWED_HOSTNAMES")),
+      allowedHostnames,
       testHostnames: testHostnames.length ? testHostnames : DEFAULT_TEST_HOSTNAMES,
       // SMS ve telefon bildirimi, yanıtı geciktirmemek için arka planda gönderilir; hataları randevuyu etkilemez.
       afterBooking: async (appointmentId) => {

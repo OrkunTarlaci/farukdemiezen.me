@@ -23,6 +23,9 @@ async function setup(beforeOperations?: (db: PGlite) => Promise<void>) {
     create table auth.users (id uuid primary key, email text);
     create function auth.uid() returns uuid language sql stable as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    create function auth.jwt() returns jsonb language sql stable as
+      $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
+    create table auth.mfa_factors (id uuid primary key default gen_random_uuid(), user_id uuid, status text);
     grant usage on schema public to anon, authenticated, service_role;
     grant usage on schema auth to anon, authenticated, service_role;
   `)
@@ -39,6 +42,7 @@ async function setup(beforeOperations?: (db: PGlite) => Promise<void>) {
   await db.exec(sql('migrations/0008_bulk_cancel.sql'))
   await db.exec(sql('migrations/0009_push_subscriptions.sql'))
   await db.exec(sql('migrations/0010_booking_limit_after_captcha.sql'))
+  await db.exec(sql('migrations/0011_security_hardening.sql'))
   await db.exec(`
     insert into auth.users values ('${ADMIN_ID}', 'faruk@example.com'), ('${USER_ID}', 'x@example.com');
     insert into admin_users values ('${ADMIN_ID}');
@@ -966,7 +970,7 @@ describe('toplu iptal (0008)', () => {
 })
 
 describe('telefon bildirimi kayıtları (0009)', () => {
-  const END = 'https://push.test/cihaz-1'
+  const END = 'https://fcm.googleapis.com/fcm/send/cihaz-1'
   const count = async () => (await db.query<{ n: number }>('select count(*)::int n from push_subscriptions')).rows[0].n
 
   it('yönetici kaydeder, aynı cihaz iki kez yazılmaz, silebilir', async () => {
@@ -1003,6 +1007,94 @@ describe('telefon bildirimi kayıtları (0009)', () => {
       await db.query('delete from push_subscriptions where endpoint=$1', [END])
     })
     expect(await count()).toBe(0)
+  })
+})
+
+describe('güvenlik sertleştirmesi (0011)', () => {
+  const adminCheck = async (aal: string) => {
+    await db.exec(`select set_config('request.jwt.claims', '{"aal":"${aal}"}', false)`)
+    let ok = false
+    await asRole('authenticated', ADMIN_ID, async () => { ok = (await db.query<{ a: boolean }>('select is_admin() a')).rows[0].a })
+    await db.exec(`select set_config('request.jwt.claims', '', false)`)
+    return ok
+  }
+
+  it('iki adımlı giriş açık değilse yönetici etkilenmez; açıksa aal2 ister', async () => {
+    expect(await adminCheck('aal1')).toBe(true)
+    await db.query(`insert into auth.mfa_factors (user_id, status) values ($1, 'unverified')`, [ADMIN_ID])
+    expect(await adminCheck('aal1')).toBe(true) // yarım kalmış kurulum kilitlemez
+    await db.query(`insert into auth.mfa_factors (user_id, status) values ($1, 'verified')`, [ADMIN_ID])
+    expect(await adminCheck('aal1')).toBe(false)
+    expect(await adminCheck('aal2')).toBe(true)
+  })
+
+  it('aal1 oturum, iki adımlı giriş açıkken müşteri verisini okuyamaz', async () => {
+    await book({ start: at(futureDate(3), '15:00') })
+    await db.query(`insert into auth.mfa_factors (user_id, status) values ($1, 'verified')`, [ADMIN_ID])
+    await db.exec(`select set_config('request.jwt.claims', '{"aal":"aal1"}', false)`)
+    await asRole('authenticated', ADMIN_ID, async () => {
+      expect((await db.query('select * from appointments')).rows).toHaveLength(0)
+    })
+    await db.exec(`select set_config('request.jwt.claims', '', false)`)
+  })
+
+  it('normal kullanıcı aal2 ile de yönetici olamaz', async () => {
+    await db.exec(`select set_config('request.jwt.claims', '{"aal":"aal2"}', false)`)
+    await asRole('authenticated', USER_ID, async () => {
+      expect((await db.query<{ a: boolean }>('select is_admin() a')).rows[0].a).toBe(false)
+    })
+    await db.exec(`select set_config('request.jwt.claims', '', false)`)
+  })
+
+  it('IP başına günlük sınır uygulanır, ayar satırı yoksa kapalı kalır', async () => {
+    await db.exec('update private_settings set bookings_per_ip_per_hour = 100, bookings_per_ip_per_day = 2')
+    await asRole('service_role', null, async () => {
+      const hit = async () => (await db.query<{ ok: boolean }>(`select booking_rate_limit_hit('203.0.113.9') ok`)).rows[0].ok
+      expect([await hit(), await hit(), await hit()]).toEqual([true, true, false])
+    })
+    await db.exec('delete from private_settings')
+    await asRole('service_role', null, async () => {
+      expect((await db.query<{ ok: boolean }>(`select booking_rate_limit_hit('198.51.100.1') ok`)).rows[0].ok).toBe(false)
+      expect((await db.query<{ ok: boolean }>('select booking_global_limit_hit() ok')).rows[0].ok).toBe(false)
+    })
+  })
+
+  it('takvim genel sınırı yükseltildi', async () => {
+    expect((await db.query<any>('select public_queries_global_per_minute n from private_settings')).rows[0].n).toBeGreaterThanOrEqual(10000)
+  })
+
+  it('push yalnızca bilinen servisleri kabul eder ve yöneticiye bağlanır', async () => {
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await expectError(db.query(`select admin_save_push_subscription('https://169.254.169.254/x')`), 'invalid_endpoint')
+      await expectError(db.query(`select admin_save_push_subscription('https://fcm.googleapis.com.kotu.test/x')`), 'invalid_endpoint')
+      await db.query(`select admin_save_push_subscription('https://web.push.apple.com/abc')`)
+    })
+    const rows = (await db.query<any>('select user_id from push_subscriptions')).rows
+    expect(rows).toEqual([{ user_id: ADMIN_ID }])
+    await db.query('delete from admin_users where user_id=$1', [ADMIN_ID])
+    expect((await db.query('select * from push_subscriptions')).rows).toHaveLength(0)
+  })
+
+  it('yönetici değişikliklerini kaydeder; kayıtları istemci okuyamaz', async () => {
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await db.query(`update services set price_minor = 12345 where name = 'Saç Kesimi'`)
+    })
+    const log = (await db.query<any>(`select actor, table_name, action, new_data from admin_audit_log where table_name='services'`)).rows
+    expect(log).toHaveLength(1)
+    expect(log[0].actor).toBe(ADMIN_ID)
+    expect(log[0].new_data.price_minor).toBe(12345)
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await expectError(db.query('select * from admin_audit_log'), 'permission denied')
+    })
+    await asRole('anon', null, async () => {
+      await expectError(db.query('select * from admin_audit_log'), 'permission denied')
+    })
+  })
+
+  it('referans kodu biçimi korunur; migration tekrar çalışabilir', async () => {
+    expect((await book({ start: at(futureDate(3), '15:00') })).reference_code).toMatch(/^FD-[A-Z2-9]{6}$/)
+    await db.exec(sql('migrations/0011_security_hardening.sql'))
+    expect((await db.query<any>('select bookings_per_ip_per_day n from private_settings')).rows[0].n).toBe(30)
   })
 })
 

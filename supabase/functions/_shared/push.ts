@@ -4,6 +4,18 @@
 
 const SUBJECT = 'https://www.orkuntarlaci.me'
 const TOKEN_SECONDS = 12 * 60 * 60
+const SEND_TIMEOUT_MS = 5000
+// Yalnızca bilinen bildirim servisleri. Aynı liste admin_save_push_subscription içinde de vardır (0011).
+const PUSH_HOSTS = /^(fcm\.googleapis\.com|[a-z0-9.-]+\.push\.apple\.com|[a-z0-9.-]+\.notify\.windows\.com|[a-z0-9.-]+\.push\.services\.mozilla\.com)$/
+
+export function isPushEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint)
+    return url.protocol === 'https:' && PUSH_HOSTS.test(url.hostname)
+  } catch {
+    return false
+  }
+}
 
 export interface VapidKeys {
   /** Sıkıştırılmamış P-256 açık anahtar, base64url (65 bayt) */
@@ -72,8 +84,14 @@ export async function notifyNewBooking(deps: PushDeps): Promise<PushSummary> {
   const summary: PushSummary = { sent: 0, removed: 0, failed: 0 }
   for (const endpoint of await deps.listEndpoints()) {
     try {
+      if (!isPushEndpoint(endpoint)) {
+        await deps.removeEndpoint(endpoint)
+        summary.removed++
+        continue
+      }
       const res = await send(endpoint, {
         method: 'POST',
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
         headers: { Authorization: await vapidAuthorization(endpoint, deps.keys, now), TTL: '86400', Urgency: 'high', 'Content-Length': '0' },
       })
       if (res.ok) summary.sent++

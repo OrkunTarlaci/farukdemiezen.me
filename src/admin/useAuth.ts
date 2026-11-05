@@ -2,12 +2,16 @@ import type { Session } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
 import { checkIsAdmin } from '../lib/api'
 import { toAppError } from '../lib/errors'
+import { IDLE_LIMIT_MS, isIdleExpired, readActivity, touchActivity } from '../lib/idle'
+import { mfaStepRequired, verifiedFactorId, verifyCode } from '../lib/mfa'
+import { disablePush } from '../lib/push'
 import { getSupabase, isBackendConfigured } from '../lib/supabase'
 
 export type AuthState =
   | { status: 'loading' }
   | { status: 'unconfigured' }
   | { status: 'signedOut' }
+  | { status: 'mfa'; email: string }
   | { status: 'notAdmin'; email: string }
   | { status: 'admin'; email: string }
   | { status: 'error'; message: string }
@@ -18,9 +22,10 @@ export function useAuth() {
   const evaluate = useCallback(async (session: Session | null) => {
     if (!session) { setState({ status: 'signedOut' }); return }
     try {
+      const email = session.user.email ?? ''
+      if (await mfaStepRequired()) { setState({ status: 'mfa', email }); return }
       // Yetki SUNUCUDA doğrulanır (is_admin). Arayüz yalnızca sonucu yansıtır; asıl koruma RLS'tir.
       const ok = await checkIsAdmin()
-      const email = session.user.email ?? ''
       setState(ok ? { status: 'admin', email } : { status: 'notAdmin', email })
     } catch (e) {
       const err = toAppError(e)
@@ -50,14 +55,51 @@ export function useAuth() {
     if (!supabase) throw toAppError({ message: 'not_configured' })
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw toAppError(error)
+    touchActivity()
   }, [])
 
-  const signOut = useCallback(async () => {
+  const verifyMfa = useCallback(async (code: string) => {
+    const factorId = await verifiedFactorId()
+    if (!factorId) throw new Error('no_factor')
+    await verifyCode(factorId, code)
+    touchActivity()
+    const supabase = await getSupabase()
+    const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } }
+    await evaluate(data.session)
+  }, [evaluate])
+
+  /** Elle çıkışta bu cihazın bildirimi de kapanır; boşta kapanmada yeni randevu bildirimi sürer. */
+  const signOut = useCallback(async ({ keepPush = false }: { keepPush?: boolean } = {}) => {
     const supabase = await getSupabase()
     if (!supabase) return
+    if (!keepPush) { try { await disablePush() } catch { /* bildirim kapanamasa da çıkış yapılır */ } }
     await supabase.auth.signOut() // oturumu sonlandırır ve yerel belirteçleri siler
     setState({ status: 'signedOut' })
   }, [])
 
-  return { state, signIn, signOut }
+  // Uzun süre işlem yoksa oturumu kapatır.
+  const isAdmin = state.status === 'admin'
+  useEffect(() => {
+    if (!isAdmin) return
+    const check = () => { if (isIdleExpired(readActivity(), Date.now())) void signOut({ keepPush: true }) }
+    let last = 0
+    const activity = () => {
+      const now = Date.now()
+      if (now - last > 60_000) { last = now; check(); touchActivity(now) }
+    }
+    check()
+    if (readActivity() === null) touchActivity()
+    const timer = setInterval(check, Math.min(IDLE_LIMIT_MS, 300_000))
+    window.addEventListener('pointerdown', activity)
+    window.addEventListener('keydown', activity)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('pointerdown', activity)
+      window.removeEventListener('keydown', activity)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [isAdmin, signOut])
+
+  return { state, signIn, signOut, verifyMfa }
 }

@@ -131,6 +131,7 @@ async function processNotifications(deps, appointmentId) {
 // supabase/functions/_shared/notificationDeps.ts
 function selectProvider(name) {
   switch ((name ?? "none").toLowerCase()) {
+    // Sağlayıcı seçimi için işletmenin onayı bekleniyor (README, "SMS bildirimleri").
     default:
       return disabledProvider;
   }
@@ -215,8 +216,8 @@ var serverKey = resolveServerKey(env);
 var publicKey = resolvePublicKey(env);
 var allowedOrigins = parseList(env("ALLOWED_ORIGINS"));
 var log = (event) => console.log(JSON.stringify({ fn: "send-notifications", ...event }));
-if (!url || !serverKey || !publicKey) {
-  log({ status: 503, code: "server_not_configured", hint: "SUPABASE_URL veya Supabase anahtarları bulunamadı" });
+if (!url || !serverKey || !publicKey || allowedOrigins.length === 0) {
+  log({ status: 503, code: "server_not_configured", hint: "SUPABASE_URL, Supabase anahtarları veya ALLOWED_ORIGINS bulunamadı" });
   Deno.serve((req) => misconfiguredResponse(req, allowedOrigins, "server_not_configured"));
 } else {
   log({ status: 0, code: "started", key_source: serverKey.source, public_key_source: publicKey.source });

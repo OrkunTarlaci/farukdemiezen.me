@@ -40,6 +40,7 @@ const MESSAGES: Record<string, string> = {
   booking_service_unreachable: 'Randevu servisine şu anda ulaşılamıyor. Lütfen biraz sonra tekrar deneyin veya işletmeyi telefonla arayın.',
   not_test: 'Yalnızca test randevuları silinebilir.',
   notification_service_unreachable: 'SMS servisine ulaşılamadı. Randevu değişikliği kaydedildi; SMS durumu aşağıda görünür.',
+  invalid_endpoint: 'Bu cihazın bildirim adresi desteklenmiyor. Telefonda Chrome veya Safari ile deneyin.',
   rate_limited: 'Kısa sürede çok fazla istek gönderildi. Lütfen birkaç dakika bekleyip tekrar deneyin.',
   invalid_range: 'Tarih aralığı geçersiz. Lütfen sayfayı yenileyin.',
   invalid_request: 'Gönderilen bilgiler geçersiz. Lütfen sayfayı yenileyip tekrar deneyin.',
