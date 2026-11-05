@@ -91,7 +91,7 @@ jobs:
         # Yayınlanacak dosyalarda sb_secret_ anahtarı veya service_role JWT'si varsa yayın durdurulur.
         run: node scripts/check-secrets.mjs dist
 
-      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
