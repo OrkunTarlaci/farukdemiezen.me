@@ -61,7 +61,7 @@ export function About({ businessName }: { businessName?: string }) {
           </div>
 
           {about.quote
-            ? <blockquote className="mt-10 border-l-2 border-accent pl-4 text-lg italic text-fg sm:text-xl">“{about.quote}”<footer className="mt-2 text-sm not-italic text-muted">{name}</footer></blockquote>
+            ? <blockquote className="mt-10 border-l-2 border-accent pl-4 text-lg italic text-fg sm:text-xl">“{about.quote}”<footer className="mt-2 text-sm not-italic text-muted">{about.quoteBy ?? name}</footer></blockquote>
             : <div className="mt-10"><Placeholder label="Alıntı (isteğe bağlı)" hint="Faruk Bey'in işi hakkında kendi sözü, tek cümle." /></div>}
         </div>
       </div>

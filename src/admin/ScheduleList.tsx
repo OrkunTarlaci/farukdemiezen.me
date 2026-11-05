@@ -1,9 +1,9 @@
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import type { AppointmentIssue, ScheduleRow } from '../lib/schedule'
-import { ISSUE_LABELS } from '../lib/schedule'
+import { ISSUE_LABELS, mergeAvailableRows } from '../lib/schedule'
 import { timeOfInstant } from '../lib/time'
 import type { AppointmentRow } from '../lib/types'
-import { StatusBadge, TestBadge } from './StatusBadge'
+import { STATUS_LABELS, STATUS_TEXT, StatusBadge, TestBadge } from './StatusBadge'
 
 interface Props {
   rows: ScheduleRow[]
@@ -19,13 +19,13 @@ function minutes(a: AppointmentRow) {
 export function ScheduleList({ rows, issuesById, onOpen }: Props) {
   return (
     <ul className="space-y-2">
-      {rows.map((r) => {
+      {mergeAvailableRows(rows).map((r) => {
         const time = timeOfInstant(r.start)
         if (r.kind === 'available' || r.kind === 'break' || r.kind === 'blocked') {
           const text = r.kind === 'available' ? 'Müsait' : r.kind === 'break' ? 'Mola' : `Kapalı${r.reason ? ` — ${r.reason}` : ''}`
           return (
             <li key={r.key} className="flex min-h-[2.75rem] items-center gap-4 rounded-lg border border-dashed border-line px-4 text-sm text-subtle">
-              <span className="w-12 font-mono tabular-nums">{time}</span>
+              <span className="font-mono tabular-nums">{r.kind === 'available' ? `${time} – ${timeOfInstant(r.end)}` : time}</span>
               <span className={r.kind === 'available' ? '' : 'rounded-md border border-line px-2 py-0.5 text-xs text-muted'}>{text}</span>
             </li>
           )
@@ -55,15 +55,17 @@ export function ScheduleList({ rows, issuesById, onOpen }: Props) {
                   <span className="truncate">{a.customer_first_name} {a.customer_last_name}</span>
                   {a.is_test && <TestBadge />}
                 </span>
-                <span className="block truncate text-xs text-muted">{service} ({minutes(a)} dk)</span>
+                <span className="block truncate text-xs text-muted">
+                  <span className={`sm:hidden ${STATUS_TEXT[a.status]}`}>{STATUS_LABELS[a.status]} · </span>{service} ({minutes(a)} dk)
+                </span>
                 {issues.length > 0 && (
                   <span className="mt-1 flex items-center gap-1 text-xs text-warning">
                     <AlertTriangle className="h-3.5 w-3.5" aria-hidden />{issues.map((i) => ISSUE_LABELS[i]).join(' · ')}
                   </span>
                 )}
               </span>
-              <StatusBadge status={a.status} />
-              <ChevronRight className="hidden h-4 w-4 shrink-0 text-subtle sm:block" aria-hidden />
+              <span className="hidden sm:block"><StatusBadge status={a.status} /></span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-subtle" aria-hidden />
             </button>
           </li>
         )

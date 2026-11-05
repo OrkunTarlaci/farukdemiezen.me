@@ -9,6 +9,20 @@ export type ScheduleRow =
   | { kind: 'blocked'; key: string; start: Date; end: Date; reason: string | null }
   | { kind: 'break'; key: string; start: Date; end: Date }
 
+/** Art arda gelen müsait aralıkları tek satırda birleştirir (10:00–12:30 Müsait). */
+export function mergeAvailableRows(rows: ScheduleRow[]): ScheduleRow[] {
+  const out: ScheduleRow[] = []
+  for (const r of rows) {
+    const prev = out[out.length - 1]
+    if (r.kind === 'available' && prev?.kind === 'available' && prev.end.getTime() === r.start.getTime()) {
+      out[out.length - 1] = { ...prev, end: r.end }
+    } else {
+      out.push(r)
+    }
+  }
+  return out
+}
+
 const KIND_ORDER = { cancelled: 0, appointment: 1, blocked: 2, break: 3, available: 4 } as const
 
 /**

@@ -1,5 +1,6 @@
-import { Search } from 'lucide-react'
+import { Search, SlidersHorizontal } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { Button } from '../../components/ui/Button'
 import { EmptyState, ErrorPanel, Spinner } from '../../components/ui/feedback'
 import { inputClass, selectClass } from '../../components/ui/Field'
 import { fetchAllServices, fetchAppointmentsInRange, MAX_ADMIN_RANGE_DAYS } from '../../lib/api'
@@ -26,6 +27,7 @@ export function SearchPage() {
   const [serviceId, setServiceId] = useState('')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const rangeError =
     !isValidDateString(from) || !isValidDateString(to) ? 'Geçerli tarihler seçin.'
@@ -44,9 +46,9 @@ export function SearchPage() {
 
   return (
     <div>
-      <PageHeader title="Ara ve Filtrele" description="Bugünkü ve yaklaşan randevuları tarih, durum ve hizmete göre bulun. Önceki günlerin randevuları her gece 00:00'da silindiği için geçmiş kayıt bulunmaz." />
+      <PageHeader title="Ara ve Filtrele" description={<span className="hidden sm:inline">Bugünkü ve yaklaşan randevuları tarih, durum ve hizmete göre bulun. Önceki günlerin randevuları her gece 00:00'da silindiği için geçmiş kayıt bulunmaz.</span>} />
 
-      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Hazır aralıklar">
+      <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Hazır aralıklar">
         {PRESETS.map((p) => {
           const [f, t] = p.range(today)
           const active = from === f && to === t
@@ -56,7 +58,7 @@ export function SearchPage() {
               type="button"
               aria-pressed={active}
               onClick={() => { setFrom(f); setTo(t) }}
-              className={`min-h-[2.25rem] rounded-lg border px-3 text-sm ${active ? 'border-accent bg-accent/10 text-fg' : 'border-line text-muted hover:bg-raised hover:text-fg'}`}
+              className={`min-h-[2.75rem] shrink-0 rounded-lg border px-3 text-sm sm:min-h-[2.25rem] ${active ? 'border-accent bg-accent/10 text-fg' : 'border-line text-muted hover:bg-raised hover:text-fg'}`}
             >
               {p.label}
             </button>
@@ -64,9 +66,10 @@ export function SearchPage() {
         })}
       </div>
 
-      <form role="search" onSubmit={(e) => e.preventDefault()} className="card mb-5 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
+      <form role="search" onSubmit={(e) => e.preventDefault()} className="mb-5 grid gap-3 sm:grid-cols-2 lg:card lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr] lg:p-4">
         <label className="block text-sm sm:col-span-2 lg:col-span-1">
-          <span className="mb-1.5 block font-medium">Ara</span>
+          <span className="mb-1.5 hidden font-medium lg:block">Ara</span>
+          <span className="sr-only lg:hidden">Ara</span>
           <span className="relative block">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" aria-hidden />
             <input
@@ -78,6 +81,12 @@ export function SearchPage() {
             />
           </span>
         </label>
+        <div className="sm:col-span-2 lg:hidden">
+          <Button variant="secondary" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((v) => !v)} icon={<SlidersHorizontal className="h-4 w-4" aria-hidden />}>
+            Filtreler{status || serviceId ? ' (açık)' : ''}
+          </Button>
+        </div>
+        <div className={`${filtersOpen ? 'grid' : 'hidden'} gap-3 sm:col-span-2 sm:grid-cols-2 lg:contents`}>
         <label className="block text-sm">
           <span className="mb-1.5 block font-medium">Başlangıç</span>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputClass} />
@@ -100,6 +109,7 @@ export function SearchPage() {
             {services.data?.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_active ? '' : ' (pasif)'}</option>)}
           </select>
         </label>
+        </div>
       </form>
 
       {rangeError && <ErrorPanel message={rangeError} />}
@@ -127,7 +137,8 @@ export function SearchPage() {
                     </span>
                     <span className="row-start-2 flex items-center gap-2 font-medium text-fg sm:row-start-auto"><span className="truncate">{a.customer_first_name} {a.customer_last_name}</span>{a.is_test && <TestBadge />}</span>
                     <span className="hidden truncate text-muted sm:block">{a.service_name ?? a.services?.name ?? '—'} · <span className="font-mono">{a.reference_code}</span></span>
-                    <span className="row-span-2 sm:row-span-1"><StatusBadge status={a.status} /></span>
+                    <span className="col-start-2 row-span-2 row-start-1 sm:col-start-auto sm:row-span-1 sm:row-start-auto"><StatusBadge status={a.status} /></span>
+                    <span className="row-start-3 truncate text-xs text-muted sm:hidden">{a.service_name ?? a.services?.name ?? '—'}</span>
                   </button>
                 </li>
               ))}

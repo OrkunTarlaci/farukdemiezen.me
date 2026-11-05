@@ -64,14 +64,14 @@ function DayRow({ wh }: { wh: WorkingHours }) {
         </label>
       </div>
       {!closed && (
-        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto_1fr_1fr] lg:items-end">
+        <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_auto_1fr_1fr] lg:items-end">
           <Field id={`${id}-open`} label="Açılış" error={errors.opens_at?.message}>
             {(p) => <input {...p} type="time" step={300} {...register('opens_at')} className={inputClass} />}
           </Field>
           <Field id={`${id}-close`} label="Kapanış" error={errors.closes_at?.message}>
             {(p) => <input {...p} type="time" step={300} {...register('closes_at')} className={inputClass} />}
           </Field>
-          <label className="flex min-h-[2.75rem] items-center gap-2 text-sm text-muted sm:col-span-2 lg:col-span-1">
+          <label className="flex min-h-[2.75rem] items-center gap-2 text-sm text-muted col-span-2 lg:col-span-1">
             <input type="checkbox" {...register('has_break')} className="h-4 w-4 accent-[rgb(var(--accent))]" />
             Mola var
           </label>

@@ -15,6 +15,7 @@ import { ISSUE_LABELS, type AppointmentIssue } from '../lib/schedule'
 import { dateOfInstant, formatDateLong, formatPrice, isValidDateString, timeOfInstant } from '../lib/time'
 import type { AppointmentRow } from '../lib/types'
 import { useAsync } from '../lib/useAsync'
+import { ContactActions } from './ContactActions'
 import { NotificationPanel } from './NotificationPanel'
 import { PhoneCell } from './PhoneCell'
 import { StatusBadge, TestBadge } from './StatusBadge'
@@ -22,6 +23,8 @@ import { StatusBadge, TestBadge } from './StatusBadge'
 interface Props {
   appointment: AppointmentRow | null
   issues?: AppointmentIssue[]
+  /** Pencere doğrudan ret / iptal kutusu açık gelsin (listedeki "Reddet" düğmesi) */
+  startCancel?: boolean
   onClose: () => void
   /** Değişiklikten sonra listeyi sunucudan yeniden yüklemek için */
   onChanged: () => void
@@ -95,7 +98,7 @@ function Reschedule({ appointment, onDone, onCancel }: { appointment: Appointmen
   )
 }
 
-export function AppointmentDialog({ appointment: a, issues = [], onClose, onChanged }: Props) {
+export function AppointmentDialog({ appointment: a, issues = [], startCancel = false, onClose, onChanged }: Props) {
   const [confirmingCancel, setConfirmingCancel] = useState(false)
   const [rescheduling, setRescheduling] = useState(false)
   const [busy, setBusy] = useState<AdminStatusChange | null>(null)
@@ -112,10 +115,10 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
   const inFlight = useRef(false)
 
   useEffect(() => {
-    setConfirmingCancel(false); setRescheduling(false); setError(null); setBusy(null); setDone(null)
+    setConfirmingCancel(startCancel); setRescheduling(false); setError(null); setBusy(null); setDone(null)
     setSmsNote(null); setConfirmingDelete(false)
     setReason(''); setCancelledNow(null); setNoticeOpened(false)
-  }, [a?.id])
+  }, [a?.id, startCancel])
 
   /**
    * Durum değişikliği veritabanına kaydedildikten SONRA bildirim kuyruğunu işletir. SMS başarısız olsa da
@@ -215,10 +218,6 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
 
   const rows: [string, React.ReactNode][] = a
     ? [
-        ['Tarih', formatDateLong(dateOfInstant(a.starts_at))],
-        ['Saat', `${timeOfInstant(a.starts_at)} – ${timeOfInstant(a.ends_at)}`],
-        ['Hizmet', a.service_name ?? a.services?.name ?? '—'],
-        ['Fiyat', price ?? <span className="text-muted">Kayıtlı değil</span>],
         ['Telefon', <PhoneCell key="p" e164={a.customer_phone} />],
         ['E-posta', a.customer_email ? <span className="break-all">{a.customer_email}</span> : '—'],
         ['Not', a.customer_note ? <span className="whitespace-pre-wrap break-words">{a.customer_note}</span> : '—'],
@@ -240,7 +239,7 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
   const draftText = a ? adminCancelMessage(a.starts_at, reason, siteConfig.name) : ''
 
   return (
-    <Dialog open={Boolean(a)} onClose={onClose} title={a ? `${a.customer_first_name} ${a.customer_last_name}` : 'Randevu'}>
+    <Dialog sheet open={Boolean(a)} onClose={onClose} title={a ? `${a.customer_first_name} ${a.customer_last_name}` : 'Randevu'}>
       {a && (
         <div>
           <div className="mb-4 flex flex-wrap items-center gap-2"><StatusBadge status={a.status} />{a.is_test && <TestBadge />}</div>
@@ -257,14 +256,12 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
             </div>
           )}
 
-          <dl className="overflow-hidden rounded-lg border border-line">
-            {rows.map(([k, v]) => (
-              <div key={k} className="grid grid-cols-[6.5rem_1fr] items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-b-0">
-                <dt className="text-muted">{k}</dt>
-                <dd className="min-w-0 text-fg">{v}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="mb-4">
+            <p className="text-3xl font-semibold tabular-nums text-fg">{timeOfInstant(a.starts_at)}<span className="text-lg font-normal text-muted"> – {timeOfInstant(a.ends_at)}</span></p>
+            <p className="mt-1 text-sm text-muted">{formatDateLong(dateOfInstant(a.starts_at))}</p>
+            <p className="mt-1 text-sm text-fg">{a.service_name ?? a.services?.name ?? '—'} · {price ?? <span className="text-muted">Fiyat kayıtlı değil</span>}</p>
+          </div>
+          <ContactActions phone={a.customer_phone} />
 
           <div aria-live="polite" className="mt-4 space-y-3 empty:hidden">
             {error && <ErrorPanel message={error} />}
@@ -289,7 +286,7 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
           )}
 
           {!confirmingCancel && !rescheduling && (
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2 [&>button]:flex-1">
               {a.status === 'pending' && (
                 <Button loading={busy === 'confirmed'} disabled={disabled} onClick={() => change('confirmed')}>Onayla</Button>
               )}
@@ -318,25 +315,6 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
             </div>
           )}
 
-          {smsNote && <p role="status" className="mt-3 text-xs text-warning">{smsNote}</p>}
-
-          <NotificationPanel appointmentId={a.id} refreshKey={smsRefresh} />
-
-          {a.is_test && !confirmingDelete && (
-            <div className="mt-5 border-t border-line pt-4">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)}>Test randevusunu sil</Button>
-            </div>
-          )}
-          {a.is_test && confirmingDelete && (
-            <div role="alertdialog" aria-label="Silme onayı" className="mt-5 rounded-lg border border-danger/40 bg-danger/[0.08] p-4">
-              <p className="text-sm">Bu test randevusu ve SMS kayıtları kalıcı olarak silinsin mi?</p>
-              <div className="mt-3 flex flex-wrap gap-3">
-                <Button variant="danger" loading={deleting} onClick={removeTest}>Evet, sil</Button>
-                <Button variant="ghost" disabled={deleting} onClick={() => setConfirmingDelete(false)}>Vazgeç</Button>
-              </div>
-            </div>
-          )}
-
           {rescheduling && (
             <Reschedule
               appointment={a}
@@ -361,6 +339,34 @@ export function AppointmentDialog({ appointment: a, issues = [], onClose, onChan
               </div>
             </div>
           )}
+          <dl className="mt-5 overflow-hidden rounded-lg border border-line">
+            {rows.map(([k, v]) => (
+              <div key={k} className="grid grid-cols-[6.5rem_1fr] items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-b-0">
+                <dt className="text-muted">{k}</dt>
+                <dd className="min-w-0 text-fg">{v}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {smsNote && <p role="status" className="mt-3 text-xs text-warning">{smsNote}</p>}
+
+          <NotificationPanel appointmentId={a.id} refreshKey={smsRefresh} />
+
+          {a.is_test && !confirmingDelete && (
+            <div className="mt-5 border-t border-line pt-4">
+              <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)}>Test randevusunu sil</Button>
+            </div>
+          )}
+          {a.is_test && confirmingDelete && (
+            <div role="alertdialog" aria-label="Silme onayı" className="mt-5 rounded-lg border border-danger/40 bg-danger/[0.08] p-4">
+              <p className="text-sm">Bu test randevusu ve SMS kayıtları kalıcı olarak silinsin mi?</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Button variant="danger" loading={deleting} onClick={removeTest}>Evet, sil</Button>
+                <Button variant="ghost" disabled={deleting} onClick={() => setConfirmingDelete(false)}>Vazgeç</Button>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
     </Dialog>

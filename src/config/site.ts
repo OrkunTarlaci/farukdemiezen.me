@@ -26,7 +26,7 @@ export const siteConfig = {
     photoUrl: 'images/faruk-demirezen.jpg' as string | null,
     photoAlt: 'Faruk Demirezen, siyah balıkçı yaka kazak ve kadife mont giymiş, kameraya bakıyor',
     // Başlığın altındaki tek cümlelik tanıtım. Örn. "Kendini tanıtan bir cümle."
-    intro: null as string | null,
+    intro: '13 yıldır bu işte.' as string | null,
     // Hikâye bölümleri. Başlıklar değiştirilebilir, bölüm eklenip çıkarılabilir.
     // text: bir veya birkaç paragraf (her paragraf dizide ayrı bir metin).
     story: [
@@ -48,15 +48,16 @@ export const siteConfig = {
       {
         title: 'Çalışma anlayışı',
         hint: 'Müşteriye nasıl yaklaşır, işinde neye dikkat eder.',
-        // GEÇİCİ METİN: Faruk Bey'in onayıyla güncellenmelidir.
         text: [
-          'Her randevu önceden ayrılır; acele edilmeden, tek bir müşteriye odaklanarak çalışılır.',
-          'Saç ve sakal bakımında sade, temiz ve düzenli bir iş hedeflenir.',
+          'Berberlik bizim için yalnızca saç kesiminden ibaret değil; özen, dikkat ve emeğin bir araya geldiği bir meslek.',
+          'The Man’s Barber Shop olarak amacımız, her müşterimizin tarzına, beklentilerine ve kişisel tercihine uygun hizmet sunmak. Klasik kesimlerden modern saç stillerine kadar her uygulamada detaylara önem veriyor, işimizi özenle ve titizlikle yapıyoruz.',
+          'Bizim için önemli olan yalnızca iyi bir görünüm oluşturmak değil, müşterilerimizin kendilerini iyi hissetmelerini sağlamak.',
         ] as string[] | null,
       },
     ],
-    // İsteğe bağlı kısa alıntı (Faruk Bey'in kendi sözü). Örn. işi hakkında tek cümle.
-    quote: null as string | null,
+    // İsteğe bağlı kısa alıntı ve altında görünecek ad (null ise işletme adı yazılır).
+    quote: 'Style is discipline.' as string | null,
+    quoteBy: 'The Man’s Barber Shop' as string | null,
   },
 
   // KVKK AYDINLATMA METNİ — TASLAK. Hukuki incelemeden geçmemiştir; uygunluğu doğrulanmamıştır.

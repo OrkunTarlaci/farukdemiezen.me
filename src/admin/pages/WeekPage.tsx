@@ -60,7 +60,7 @@ export function WeekPage() {
             <Button variant="secondary" size="sm" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Önceki hafta" icon={<ChevronLeft className="h-4 w-4" aria-hidden />} />
             <Button variant={weekStart === mondayOf(today) ? 'primary' : 'secondary'} size="sm" onClick={() => setWeekStart(mondayOf(today))}>Bu hafta</Button>
             <Button variant="secondary" size="sm" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Sonraki hafta" icon={<ChevronRight className="h-4 w-4" aria-hidden />} />
-            <Button variant="secondary" size="sm" onClick={week.reload} aria-label="Yenile" icon={<RotateCw className={`h-4 w-4 ${week.loading ? 'animate-spin' : ''}`} aria-hidden />} />
+            <Button className="max-sm:hidden" variant="secondary" size="sm" onClick={week.reload} aria-label="Yenile" icon={<RotateCw className={`h-4 w-4 ${week.loading ? 'animate-spin' : ''}`} aria-hidden />} />
           </>
         }
       />
@@ -74,9 +74,9 @@ export function WeekPage() {
             const wh = hours.data?.find((w) => w.weekday === isoWeekday(d))
             const list = byDay[d] ?? []
             const blocked = current.blocked.filter((b) => dateOfInstant(b.starts_at) <= d && dateOfInstant(new Date(Date.parse(b.ends_at) - 1)) >= d)
-            const isToday = d === today
+            const isToday = d === today // geçmiş günlerin kaydı gece silindiği için telefonda gösterilmez
             return (
-              <section key={d} aria-label={formatDateShort(d)} className={`card flex min-h-[8rem] flex-col p-3 ${isToday ? 'border-accent/60' : ''}`}>
+              <section key={d} aria-label={formatDateShort(d)} className={`card flex-col p-3 md:flex md:min-h-[8rem] ${isToday ? 'border-accent/60' : ''} ${d < today && weekStart === mondayOf(today) ? 'hidden' : 'flex'}`}>
                 <header className="mb-2 flex items-baseline justify-between gap-2">
                   <h2 className="text-sm">
                     <span className={isToday ? 'text-accent' : 'text-fg'}>{WEEKDAY_SHORT[isoWeekday(d) - 1]}</span>{' '}
@@ -101,7 +101,7 @@ export function WeekPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedId(a.id)}
-                          className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors hover:bg-raised ${issuesById[a.id] ? 'border-warning/50' : 'border-line'} ${a.status === 'cancelled' ? 'opacity-60' : ''}`}
+                          className={`flex min-h-[2.75rem] w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm transition-colors hover:bg-raised xl:min-h-0 xl:text-xs ${issuesById[a.id] ? 'border-warning/50' : 'border-line'} ${a.status === 'cancelled' ? 'opacity-60' : ''}`}
                         >
                           <span className="font-mono tabular-nums text-fg">{timeOfInstant(a.starts_at)}</span>
                           <span className={`min-w-0 flex-1 truncate ${a.status === 'cancelled' ? 'line-through' : ''}`}>

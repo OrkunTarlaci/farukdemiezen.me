@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { summarizeWorkingHours } from './hours'
-import { appointmentIssues, buildDaySchedule } from './schedule'
+import { appointmentIssues, buildDaySchedule, mergeAvailableRows } from './schedule'
 import { timeOfInstant, zonedToInstant } from './time'
 import type { AppointmentRow, WorkingHours } from './types'
 
@@ -112,5 +112,21 @@ describe('çalışma saati özeti', () => {
       { days: 'Sal', hours: '10:00–19:00' },
       { days: 'Çar', hours: '10:00–17:00' },
     ])
+  })
+})
+
+describe('mergeAvailableRows', () => {
+  const at = (h: number) => new Date(Date.UTC(2026, 10, 5, h))
+  const free = (h: number) => ({ kind: 'available' as const, key: `a${h}`, start: at(h), end: at(h + 1) })
+  const brk = (h: number) => ({ kind: 'break' as const, key: `b${h}`, start: at(h), end: at(h + 1) })
+
+  it('art arda müsait aralıkları birleştirir, araya giren satırda böler', () => {
+    const out = mergeAvailableRows([free(8), free(9), brk(10), free(11)])
+    expect(out.map((r) => [r.kind, r.start.getUTCHours(), r.end.getUTCHours()])).toEqual([
+      ['available', 8, 10], ['break', 10, 11], ['available', 11, 12],
+    ])
+  })
+  it('aralarında boşluk olan müsait aralıkları birleştirmez', () => {
+    expect(mergeAvailableRows([free(8), free(10)])).toHaveLength(2)
   })
 })

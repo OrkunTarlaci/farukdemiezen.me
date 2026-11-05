@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState, ErrorPanel, Spinner } from '../../components/ui/feedback'
 import { fetchAppointmentsForDay, fetchBlockedForDay, fetchSettings, fetchWorkingHours } from '../../lib/api'
 import { appointmentIssues, buildDaySchedule, type AppointmentIssue } from '../../lib/schedule'
-import { addDays, formatDateLong, formatPrice, isoWeekday, isValidDateString } from '../../lib/time'
+import { addDays, formatDateLong, formatPrice, isoWeekday, isValidDateString, WEEKDAY_SHORT } from '../../lib/time'
 import { useLiveAppointments } from '../../lib/useLiveAppointments'
 import { useIstanbulToday } from '../../lib/useToday'
 import { summarizeAppointments } from '../../lib/stats'
@@ -12,6 +12,39 @@ import { useAsync } from '../../lib/useAsync'
 import { AppointmentDialog } from '../AppointmentDialog'
 import { PageHeader, StatCard } from '../AdminLayout'
 import { ScheduleList } from '../ScheduleList'
+
+/** Telefon: iki haftalık gün şeridi; başparmakla kaydırılır, takvim düğmesi başka bir gün seçtirir. */
+function DayStrip({ today, date, onPick }: { today: string; date: string; onPick: (d: string) => void }) {
+  const selectedRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => { selectedRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' }) }, [date])
+  const days = Array.from({ length: 14 }, (_, i) => addDays(today, i))
+  return (
+    <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:hidden" role="group" aria-label="Gün seçimi">
+      <label className="relative flex h-[3.75rem] w-12 shrink-0 items-center justify-center rounded-lg border border-line text-accent">
+        <CalendarDays className="h-5 w-5" aria-hidden />
+        <span className="sr-only">Başka bir tarih seç</span>
+        <input type="date" value={date} onChange={(e) => onPick(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+      </label>
+      {days.map((d) => {
+        const active = d === date
+        return (
+          <button
+            key={d}
+            ref={active ? selectedRef : undefined}
+            type="button"
+            aria-pressed={active}
+            aria-label={formatDateLong(d)}
+            onClick={() => onPick(d)}
+            className={`flex h-[3.75rem] w-12 shrink-0 flex-col items-center justify-center rounded-lg border text-xs ${active ? 'border-accent bg-accent font-semibold text-accent-fg' : 'border-line text-muted'}`}
+          >
+            {d === today ? 'Bugün' : WEEKDAY_SHORT[isoWeekday(d) - 1]}
+            <span className={`text-base font-semibold tabular-nums ${active ? '' : 'text-fg'}`}>{Number(d.slice(8))}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 /** Seçili günün randevuları: özet kartları, dikkat gerektirenler ve kronolojik çizelge. */
 export function DayPage() {
@@ -76,10 +109,16 @@ export function DayPage() {
     <div>
       <PageHeader
         title="Günlük Randevular"
-        description={<>İşletme günü (İstanbul): <strong className="text-fg">{formatDateLong(today)}</strong>. Önceki günlerin randevuları her gece 00:00'da silinir.</>}
+        description={<>
+          <span className="sm:hidden">{formatDateLong(date)}</span>
+          <span className="hidden sm:inline">İşletme günü (İstanbul): <strong className="text-fg">{formatDateLong(today)}</strong>. Önceki günlerin randevuları her gece 00:00'da silinir.</span>
+        </>}
+        actions={<span className="lg:hidden"><Button variant="secondary" size="md" onClick={day.reload} aria-label="Listeyi yenile" icon={<RotateCw className={`h-4 w-4 ${day.loading ? 'animate-spin' : ''}`} aria-hidden />} /></span>}
       />
 
-      <div className="card mb-5 flex flex-wrap items-center gap-2 p-2" role="group" aria-label="Gün seçimi">
+      <DayStrip today={today} date={date} onPick={setValidDate} />
+
+      <div className="card mb-5 hidden flex-wrap items-center gap-2 p-2 lg:flex" role="group" aria-label="Gün seçimi">
         <Button variant="ghost" onClick={() => setValidDate(addDays(date, -1))} aria-label="Önceki gün" icon={<ChevronLeft className="h-4 w-4" aria-hidden />} />
         <label className="relative inline-flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium sm:flex-none">
           <CalendarDays className="h-4 w-4 text-accent" aria-hidden />
@@ -100,7 +139,16 @@ export function DayPage() {
       </div>
 
       {current && (
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <p className="mb-4 text-sm text-muted sm:hidden">
+          <span className="font-semibold text-fg">{counts.active} aktif</span>
+          {counts.pending > 0 && <span className="text-warning"> · {counts.pending} onay bekliyor</span>}
+          {counts.completed > 0 && <> · {counts.completed} tamamlandı</>}
+          {counts.cancelled + counts.noShow > 0 && <> · {counts.cancelled} iptal / {counts.noShow} gelmedi</>}
+          {formatPrice(counts.expectedMinor) && <> · {formatPrice(counts.expectedMinor)}</>}
+        </p>
+      )}
+      {current && (
+        <div className="mb-5 hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-6">
           <StatCard label="Aktif randevu" value={counts.active} />
           <StatCard label="Onay bekliyor" value={counts.pending} tone="warning" />
           <StatCard label="Onaylandı" value={counts.confirmed} tone="success" />
@@ -117,7 +165,7 @@ export function DayPage() {
       {attention > 0 && (
         <p role="note" className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/[0.08] p-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-          <span>{attention} randevu dikkat gerektiriyor (güncel çalışma saatleriyle çakışıyor, onay bekliyor ya da sonucu işaretlenmedi). Aşağıda işaretlidir.</span>
+          <span>{attention} randevu dikkat gerektiriyor<span className="hidden sm:inline"> (güncel çalışma saatleriyle çakışıyor, onay bekliyor ya da sonucu işaretlenmedi). Aşağıda işaretlidir</span>.</span>
         </p>
       )}
 

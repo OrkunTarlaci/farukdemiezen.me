@@ -57,6 +57,14 @@
   .section-title { @apply text-2xl sm:text-3xl; }
 }
 
+@keyframes sheet-rise {
+  from { transform: translateY(1.5rem); }
+  to { transform: none; }
+}
+@media (max-width: 1023.98px) {
+  dialog[open].sheet-rise { animation: sheet-rise 0.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {

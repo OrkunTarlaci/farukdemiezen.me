@@ -1,23 +1,99 @@
-import { CalendarDays, CalendarRange, CalendarX, Clock, LayoutDashboard, LogOut, Scissors, Search, Settings } from 'lucide-react'
-import { Suspense, type ReactNode } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { CalendarDays, CalendarRange, CalendarX, ChevronRight, Clock, ExternalLink, LayoutDashboard, LogOut, Menu, Scissors, Search, Settings } from 'lucide-react'
+import { Suspense, useState, type ReactNode } from 'react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Dialog } from '../components/ui/Dialog'
 import { Spinner } from '../components/ui/feedback'
 import { Monogram } from '../components/ui/Logo'
+import { usePendingCount } from './usePendingCount'
 
+// `short` olanlar telefonda alt çubukta, diğerleri "Daha" sayfasındadır.
 const NAV = [
-  { to: '/admin', label: 'Genel Bakış', icon: LayoutDashboard, end: true },
-  { to: '/admin/gun', label: 'Günlük Randevular', icon: CalendarDays },
-  { to: '/admin/takvim', label: 'Takvim', icon: CalendarRange },
-  { to: '/admin/ara', label: 'Ara ve Filtrele', icon: Search },
+  { to: '/admin', label: 'Genel Bakış', short: 'Özet', icon: LayoutDashboard, end: true },
+  { to: '/admin/gun', label: 'Günlük Randevular', short: 'Randevular', icon: CalendarDays },
+  { to: '/admin/takvim', label: 'Takvim', short: 'Takvim', icon: CalendarRange },
+  { to: '/admin/ara', label: 'Ara ve Filtrele', short: 'Ara', icon: Search },
   { to: '/admin/toplu-iptal', label: 'Toplu İptal', icon: CalendarX },
   { to: '/admin/hizmetler', label: 'Hizmetler', icon: Scissors },
   { to: '/admin/saatler', label: 'Çalışma Saatleri', icon: Clock },
   { to: '/admin/ayarlar', label: 'Ayarlar', icon: Settings },
 ] as const
 
+const MORE = NAV.filter((n) => !('short' in n))
+
+function PendingBadge({ count }: { count: number }) {
+  if (count === 0) return null
+  return (
+    <span className="inline-flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-warning px-1 text-[0.6875rem] font-semibold tabular-nums text-bg">
+      <span className="sr-only">, onay bekleyen: </span>{count}
+    </span>
+  )
+}
+
+const tabClass = (active: boolean) =>
+  `relative flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 text-[0.6875rem] font-medium ${active ? 'text-accent' : 'text-muted'}`
+
+/** Telefon ve tablet: başparmağın ulaştığı alt çubuk. */
+function BottomBar({ pending, onMore }: { pending: number; onMore: () => void }) {
+  const { pathname } = useLocation()
+  const inMore = MORE.some((n) => pathname.startsWith(n.to))
+  return (
+    <nav aria-label="Yönetim menüsü" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <div className="mx-auto flex max-w-xl">
+        {NAV.filter((n) => 'short' in n).map(({ to, icon: Icon, ...rest }) => (
+          <NavLink key={to} to={to} end={'end' in rest} className={({ isActive }) => tabClass(isActive)}>
+            <span className="relative">
+              <Icon className="h-5 w-5" aria-hidden />
+              {to === '/admin' && <span className="absolute -right-3 -top-1.5"><PendingBadge count={pending} /></span>}
+            </span>
+            {'short' in rest && rest.short}
+          </NavLink>
+        ))}
+        <button type="button" onClick={onMore} className={tabClass(inMore)}>
+          <Menu className="h-5 w-5" aria-hidden />
+          Daha
+        </button>
+      </div>
+    </nav>
+  )
+}
+
+function MoreSheet({ open, onClose, email, onSignOut }: { open: boolean; onClose: () => void; email: string; onSignOut: () => void }) {
+  const row = 'flex min-h-[3.25rem] w-full items-center gap-3 px-1 text-base text-fg'
+  return (
+    <Dialog open={open} onClose={onClose} title="Daha fazla" sheet>
+      <ul className="divide-y divide-line">
+        {MORE.map(({ to, label, icon: Icon }) => (
+          <li key={to}>
+            <Link to={to} onClick={onClose} className={row}>
+              <Icon className="h-5 w-5 text-muted" aria-hidden />
+              <span className="flex-1">{label}</span>
+              <ChevronRight className="h-4 w-4 text-subtle" aria-hidden />
+            </Link>
+          </li>
+        ))}
+        <li>
+          <a href={import.meta.env.BASE_URL} target="_blank" rel="noopener noreferrer" className={row}>
+            <ExternalLink className="h-5 w-5 text-muted" aria-hidden />
+            <span className="flex-1">Siteyi aç</span>
+          </a>
+        </li>
+        <li>
+          <button type="button" onClick={onSignOut} className={row}>
+            <LogOut className="h-5 w-5 text-muted" aria-hidden />
+            <span className="flex-1 text-left">Çıkış yap</span>
+          </button>
+        </li>
+      </ul>
+      <p className="mt-3 truncate text-xs text-subtle">{email}</p>
+    </Dialog>
+  )
+}
+
 interface Props { email: string; onSignOut: () => void }
 
 export function AdminLayout({ email, onSignOut }: Props) {
+  const pending = usePendingCount()
+  const [moreOpen, setMoreOpen] = useState(false)
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[15rem_1fr]">
       {/* Masaüstü kenar çubuğu */}
@@ -38,7 +114,8 @@ export function AdminLayout({ email, onSignOut }: Props) {
               ].join(' ')}
             >
               <Icon className="h-4 w-4" aria-hidden />
-              {label}
+              <span className="flex-1">{label}</span>
+              {to === '/admin' && <PendingBadge count={pending} />}
             </NavLink>
           ))}
         </nav>
@@ -55,57 +132,25 @@ export function AdminLayout({ email, onSignOut }: Props) {
       </aside>
 
       <div className="min-w-0">
-        {/* Mobil / tablet üst çubuk ve kaydırılabilir menü */}
-        <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur-md lg:hidden">
-          <div className="flex h-14 items-center justify-between gap-3 px-4">
-            <span className="flex items-center gap-2.5">
-              <Monogram className="h-7 w-7" />
-              <span className="text-sm font-semibold">Yönetim Paneli</span>
-            </span>
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="inline-flex h-11 items-center gap-2 rounded-lg px-3 text-sm text-muted hover:bg-raised hover:text-fg"
-            >
-              <LogOut className="h-4 w-4" aria-hidden /> Çıkış
-            </button>
-          </div>
-          <nav aria-label="Yönetim menüsü" className="-mb-px flex gap-1 overflow-x-auto px-2 [scrollbar-width:none]">
-            {NAV.map(({ to, label, icon: Icon, ...rest }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={'end' in rest}
-                className={({ isActive }) => [
-                  'flex min-h-[2.75rem] shrink-0 items-center gap-2 border-b-2 px-3 text-sm',
-                  isActive ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg',
-                ].join(' ')}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-                {label}
-              </NavLink>
-            ))}
-          </nav>
-        </header>
-
-        <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="mx-auto w-full max-w-6xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 lg:px-8 lg:py-8">
           <Suspense fallback={<Spinner />}>
             <Outlet />
           </Suspense>
         </main>
       </div>
+
+      <BottomBar pending={pending} onMore={() => setMoreOpen(true)} />
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} email={email} onSignOut={onSignOut} />
     </div>
   )
 }
 
 export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-xl sm:text-2xl">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted">{description}</p>}
-      </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+    <div className="mb-5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 sm:mb-6">
+      <h1 className="text-xl sm:text-2xl">{title}</h1>
+      {actions && <div className="flex gap-2 sm:row-span-2 sm:self-end">{actions}</div>}
+      {description && <p className="col-span-2 col-start-1 mt-1 text-sm text-muted sm:col-span-1">{description}</p>}
     </div>
   )
 }

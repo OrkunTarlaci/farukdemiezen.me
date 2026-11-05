@@ -9,6 +9,15 @@ export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   cancelled: 'İptal edildi',
 }
 
+/** Telefon satırlarında rozet yerine kullanılan yazı rengi. */
+export const STATUS_TEXT: Record<AppointmentStatus, string> = {
+  pending: 'text-warning',
+  confirmed: 'text-success',
+  completed: 'text-accent',
+  no_show: 'text-muted',
+  cancelled: 'text-danger',
+}
+
 const MAP = {
   pending: { Icon: Clock, cls: 'border-warning/40 bg-warning/10 text-warning' },
   confirmed: { Icon: CheckCircle2, cls: 'border-success/40 bg-success/10 text-success' },

@@ -52,10 +52,10 @@ export function NotificationPanel({ appointmentId, refreshKey }: { appointmentId
   }
 
   return (
-    <section aria-labelledby={`sms-${appointmentId}`} className="mt-5">
-      <h3 id={`sms-${appointmentId}`} className="flex items-center gap-2 text-sm text-muted">
+    <details className="mt-5">
+      <summary className="flex min-h-[2.75rem] cursor-pointer items-center gap-2 text-sm text-muted">
         <MessageSquare className="h-4 w-4" aria-hidden /> SMS bildirimleri
-      </h3>
+      </summary>
       {logs.loading && <Spinner label="SMS kayıtları yükleniyor…" />}
       {logs.error && <div className="mt-2"><ErrorPanel message={logs.error.message} onRetry={logs.reload} /></div>}
       {logs.data && logs.data.length === 0 && <p className="mt-2 text-sm text-subtle">Bu randevu için SMS kaydı yok.</p>}
@@ -85,6 +85,6 @@ export function NotificationPanel({ appointmentId, refreshKey }: { appointmentId
         </ul>
       )}
       {error && <div className="mt-2"><ErrorPanel message={error} /></div>}
-    </section>
+    </details>
   )
 }
