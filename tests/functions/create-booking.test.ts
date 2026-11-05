@@ -20,10 +20,11 @@ const valid = {
 function deps(over: Partial<Deps> = {}): Deps & { calls: Record<string, ReturnType<typeof vi.fn>> } {
   const verifyTurnstile = vi.fn(async () => ({ success: true, action: 'booking', hostname: 'kullanici.github.io' }))
   const bookingRateLimitHit = vi.fn(async () => true)
+  const bookingGlobalLimitHit = vi.fn(async () => true)
   const createAppointment = vi.fn(async () => ({ data: { reference_code: 'FD-ABC234', status: 'pending' }, error: null }))
   const d: Deps = {
     captchaConfigured: true,
-    verifyTurnstile, bookingRateLimitHit, createAppointment,
+    verifyTurnstile, bookingRateLimitHit, bookingGlobalLimitHit, createAppointment,
     allowedOrigins: [ORIGIN],
     allowedHostnames: ['kullanici.github.io'],
     ...over,
@@ -31,7 +32,7 @@ function deps(over: Partial<Deps> = {}): Deps & { calls: Record<string, ReturnTy
   return Object.assign(d, {
     calls: {
       verifyTurnstile: d.verifyTurnstile as never, bookingRateLimitHit: d.bookingRateLimitHit as never,
-      createAppointment: d.createAppointment as never,
+      bookingGlobalLimitHit: d.bookingGlobalLimitHit as never, createAppointment: d.createAppointment as never,
     },
   })
 }
@@ -44,6 +45,46 @@ function post(body: unknown, headers: Record<string, string> = {}) {
   })
 }
 const errorOf = async (r: Response) => ((await r.json()) as { error: string }).error
+
+describe('create-booking: genel hız sınırı CAPTCHA sonrası', () => {
+  it('geçersiz CAPTCHA genel sayacı artırmaz', async () => {
+    const d = deps({ verifyTurnstile: vi.fn(async () => ({ success: false })) })
+    for (let i = 0; i < 100; i++) expect((await handleRequest(post(valid), d)).status).toBe(403)
+    expect(d.calls.bookingGlobalLimitHit).not.toHaveBeenCalled()
+    expect(d.calls.createAppointment).not.toHaveBeenCalled()
+  })
+
+  it('yanlış action veya hostname de genel sayacı artırmaz', async () => {
+    for (const result of [{ success: true, action: 'baska', hostname: 'kullanici.github.io' }, { success: true, action: 'booking', hostname: 'kotu.test' }]) {
+      const d = deps({ verifyTurnstile: vi.fn(async () => result) })
+      expect((await handleRequest(post(valid), d)).status).toBe(403)
+      expect(d.calls.bookingGlobalLimitHit).not.toHaveBeenCalled()
+    }
+  })
+
+  it('IP sınırına takılan istek ne Turnstile ne genel sayaca ulaşır', async () => {
+    const d = deps({ bookingRateLimitHit: vi.fn(async () => false) })
+    expect((await handleRequest(post(valid), d)).status).toBe(429)
+    expect(d.calls.verifyTurnstile).not.toHaveBeenCalled()
+    expect(d.calls.bookingGlobalLimitHit).not.toHaveBeenCalled()
+  })
+
+  it('genel sınır doluysa geçerli CAPTCHA ile de randevu oluşturmaz', async () => {
+    const d = deps({ bookingGlobalLimitHit: vi.fn(async () => false) })
+    const r = await handleRequest(post(valid), d)
+    expect(r.status).toBe(429)
+    expect(await errorOf(r)).toBe('rate_limited')
+    expect(d.calls.verifyTurnstile).toHaveBeenCalledOnce()
+    expect(d.calls.createAppointment).not.toHaveBeenCalled()
+  })
+
+  it('genel sayaç hatasında kapalı kalır', async () => {
+    const d = deps({ bookingGlobalLimitHit: vi.fn(async () => { throw new Error('db') }) })
+    const r = await handleRequest(post(valid), d)
+    expect(r.status).toBe(503)
+    expect(d.calls.createAppointment).not.toHaveBeenCalled()
+  })
+})
 
 describe('create-booking: CAPTCHA zorunluluğu', () => {
   it('geçerli Turnstile sonucuyla rezervasyonu oluşturur', async () => {

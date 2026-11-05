@@ -342,7 +342,7 @@ Randevu talebi alındığında, onaylandığında, iptal edildiğinde ve yeniden
 | Herkes (anon) | Aktif hizmetleri, çalışma saatlerini ve herkese açık ayarları okur; müsait saatleri sorgular (`get_available_slots`, `get_available_dates`, hız sınırlı). Rezervasyonu yalnızca Turnstile'dan geçerek `create-booking` Edge Function'ı üzerinden yapar. **Müşteri verisini okuyamaz, hiçbir tabloya doğrudan yazamaz, `create_appointment`'ı doğrudan çağıramaz.** |
 | Giriş yapmış ama yönetici olmayan | Anon ile aynı. Randevuları göremez. |
 | Yönetici | Randevuları, bloklu dönemleri ve durum geçmişini okur; `admin_set_appointment_status` ile onaylar/iptal eder; hizmet, çalışma saati, kapalı dönem ve ayarları düzenler (0004). |
-| Edge Function (service_role) | Yalnızca `booking_rate_limit_hit` ve `create_appointment`'ı çağırır. |
+| Edge Function (service_role) | Rezervasyon için yalnızca `booking_rate_limit_hit` (IP, Turnstile'dan önce), `booking_global_limit_hit` (genel, Turnstile'dan sonra) ve `create_appointment`'ı çağırır. |
 | SQL Editor / pg_cron (veritabanı sahibi) | Günlük temizlik (`run_daily_cleanup`) ve KVKK silme fonksiyonları (`delete_customer_data`, eski `purge_expired_customer_data`). Yönetici panelden yalnızca `admin_run_cleanup()` ile bugünden öncesini silebilir. |
 
 - Tüm tablolarda RLS açıktır; istemci rollerinin tablo yetkileri önce tamamen kaldırılır, sonra yalnızca gerekenler verilir. `private_settings` ve `rate_limit_counters` istemciye tamamen kapalıdır.

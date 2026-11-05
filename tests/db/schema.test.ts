@@ -38,6 +38,7 @@ async function setup(beforeOperations?: (db: PGlite) => Promise<void>) {
   await db.exec(sql('migrations/0007_daily_cleanup.sql'))
   await db.exec(sql('migrations/0008_bulk_cancel.sql'))
   await db.exec(sql('migrations/0009_push_subscriptions.sql'))
+  await db.exec(sql('migrations/0010_booking_limit_after_captcha.sql'))
   await db.exec(`
     insert into auth.users values ('${ADMIN_ID}', 'faruk@example.com'), ('${USER_ID}', 'x@example.com');
     insert into admin_users values ('${ADMIN_ID}');
@@ -316,6 +317,7 @@ describe('CAPTCHA mimarisi: rezervasyon yalnızca service_role ile', () => {
       await expectError(db.query('select * from rate_limit_counters'), 'permission denied')
       await expectError(db.query(`select rate_limit_hit('x','y',1,60)`), 'permission denied')
       await expectError(db.query(`select booking_rate_limit_hit('1.2.3.4')`), 'permission denied')
+      await expectError(db.query('select booking_global_limit_hit()'), 'permission denied')
       await expectError(db.query('select purge_expired_customer_data()'), 'permission denied')
       await expectError(db.query(`select delete_customer_data('05321112233')`), 'permission denied')
       await expectError(db.query(`select * from available_slots_internal(current_date, gen_random_uuid())`), 'permission denied')
@@ -393,6 +395,25 @@ describe('anonim sorgu hız sınırı', () => {
       expect(await hit('203.0.113.7')).toBe(true)
       expect(await hit('203.0.113.7')).toBe(false)
       expect(await hit('198.51.100.9')).toBe(true)
+    })
+  })
+
+  it('IP denemeleri genel sayacı doldurmaz; genel sınır ayrı sayılır (0010)', async () => {
+    await db.exec('update private_settings set bookings_per_ip_per_hour = 10, bookings_global_per_hour = 3')
+    await asRole('service_role', null, async () => {
+      const hit = async (ip: string) =>
+        (await db.query<{ ok: boolean }>('select booking_rate_limit_hit($1) ok', [ip])).rows[0].ok
+      const global = async () =>
+        (await db.query<{ ok: boolean }>('select booking_global_limit_hit() ok')).rows[0].ok
+      for (let i = 1; i <= 6; i++) for (let k = 0; k < 10; k++) await hit(`198.51.100.${i}`)
+      expect(await hit('203.0.113.77')).toBe(true) // gerçek müşteri kilitlenmez
+      expect([await global(), await global(), await global(), await global()]).toEqual([true, true, true, false])
+    })
+  })
+
+  it('authenticated genel sayacı çağıramaz', async () => {
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await expectError(db.query('select booking_global_limit_hit()'), 'permission denied')
     })
   })
 })

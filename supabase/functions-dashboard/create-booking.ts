@@ -317,6 +317,11 @@ async function handleRequest(req, deps) {
   if (!captcha.success || captcha.action !== TURNSTILE_ACTION || !hostnameOk) {
     return fail(403, "captcha_failed");
   }
+  try {
+    if (!await deps.bookingGlobalLimitHit()) return fail(429, "rate_limited");
+  } catch {
+    return fail(503, "try_again");
+  }
   const isTest = captcha.hostname !== void 0 && (deps.testHostnames ?? DEFAULT_TEST_HOSTNAMES).includes(captcha.hostname);
   const { data, error } = await deps.createAppointment({
     p_service_id: input.serviceId,
@@ -381,6 +386,11 @@ if (!url || !serverKey) {
       verifyTurnstile: (token, ip) => verifyTurnstileWithCloudflare(secret, token, ip),
       bookingRateLimitHit: async (ip) => {
         const { data, error } = await admin.rpc("booking_rate_limit_hit", { p_client_ip: ip });
+        if (error) throw error;
+        return data === true;
+      },
+      bookingGlobalLimitHit: async () => {
+        const { data, error } = await admin.rpc("booking_global_limit_hit");
         if (error) throw error;
         return data === true;
       },

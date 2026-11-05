@@ -2,7 +2,8 @@
 // Deno'ya özgü hiçbir şey içermez; böylece Node/Vitest ile test edilebilir (tests/functions).
 //
 // Akış: CORS/yöntem denetimi → girdi doğrulama → IP başına hız sınırı → Turnstile doğrulaması
-//       → create_appointment (service_role). Turnstile başarısızsa veritabanına hiç gidilmez.
+//       → genel hız sınırı → create_appointment (service_role). Turnstile başarısızsa randevu
+//       oluşturulmaz ve genel sayaç artmaz; böylece geçersiz istekler herkesi kilitleyemez.
 // Test randevusu: Cloudflare'in doğruladığı hostname testHostnames içindeyse (varsayılan localhost)
 // randevu is_test=true kaydedilir. Bu karar istemciden gelen hiçbir değere dayanmaz.
 
@@ -40,8 +41,10 @@ export interface Deps {
   /** TURNSTILE_SECRET_KEY tanımlı mı? */
   captchaConfigured: boolean
   verifyTurnstile: (token: string, remoteIp: string | null) => Promise<TurnstileResult>
-  /** true = izin ver */
+  /** IP başına sınır, Turnstile'dan önce. true = izin ver */
   bookingRateLimitHit: (clientIp: string | null) => Promise<boolean>
+  /** Tüm istemciler için sınır, yalnızca Turnstile başarılıysa sayılır. true = izin ver */
+  bookingGlobalLimitHit: () => Promise<boolean>
   createAppointment: (args: Record<string, unknown>) => Promise<RpcResult>
   /** Boşsa tüm kökenlere izin verilir (Turnstile hostname denetimi yine geçerlidir). */
   allowedOrigins: string[]
@@ -155,7 +158,7 @@ export async function handleRequest(req: Request, deps: Deps): Promise<Response>
 
   const ip = clientIpFrom(req.headers)
 
-  // Hız sınırı Turnstile'dan önce: sınırı aşan istemci Cloudflare'e de istek yaptıramaz.
+  // IP sınırı Turnstile'dan önce: sınırı aşan istemci Cloudflare'e de istek yaptıramaz.
   try {
     if (!(await deps.bookingRateLimitHit(ip))) return fail(429, 'rate_limited')
   } catch {
@@ -171,6 +174,12 @@ export async function handleRequest(req: Request, deps: Deps): Promise<Response>
   const hostnameOk = deps.allowedHostnames.length === 0 || (captcha.hostname !== undefined && deps.allowedHostnames.includes(captcha.hostname))
   if (!captcha.success || captcha.action !== TURNSTILE_ACTION || !hostnameOk) {
     return fail(403, 'captcha_failed')
+  }
+
+  try {
+    if (!(await deps.bookingGlobalLimitHit())) return fail(429, 'rate_limited')
+  } catch {
+    return fail(503, 'try_again')
   }
 
   const isTest = captcha.hostname !== undefined && (deps.testHostnames ?? DEFAULT_TEST_HOSTNAMES).includes(captcha.hostname)

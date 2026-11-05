@@ -61,6 +61,11 @@ if (!url || !serverKey) {
         if (error) throw error
         return data === true
       },
+      bookingGlobalLimitHit: async () => {
+        const { data, error } = await admin.rpc('booking_global_limit_hit')
+        if (error) throw error
+        return data === true
+      },
       createAppointment: async (args) => {
         const { data, error } = await admin.rpc('create_appointment', args)
         return { data, error: error ? { message: error.message } : null }
