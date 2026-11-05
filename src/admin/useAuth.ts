@@ -5,7 +5,6 @@ import { toAppError } from '../lib/errors'
 import { isIdleExpired, readActivity, touchActivity } from '../lib/idle'
 import { clearDeviceTrust, readDeviceTrust } from '../lib/deviceToken'
 import { deviceIsTrusted, mfaStepRequired, trustThisDevice, verifiedFactorId, verifyCode } from '../lib/mfa'
-import { disablePush } from '../lib/push'
 import { getSupabase, isBackendConfigured } from '../lib/supabase'
 
 export type AuthState =
@@ -71,11 +70,10 @@ export function useAuth() {
     await evaluate(data.session)
   }, [evaluate])
 
-  /** Elle çıkışta bu cihazın bildirimi de kapanır; boşta kapanmada yeni randevu bildirimi sürer. */
-  const signOut = useCallback(async ({ keepPush = false }: { keepPush?: boolean } = {}) => {
+  /** Oturum kapanır; bu cihazın bildirimi ve güvenilir cihaz kaydı sürer. Bildirim Ayarlar'dan kapatılır. */
+  const signOut = useCallback(async () => {
     const supabase = await getSupabase()
     if (!supabase) return
-    if (!keepPush) { try { await disablePush() } catch { /* bildirim kapanamasa da çıkış yapılır */ } }
     await supabase.auth.signOut() // oturumu sonlandırır ve yerel belirteçleri siler
     setState({ status: 'signedOut' })
   }, [])
@@ -85,7 +83,7 @@ export function useAuth() {
   useEffect(() => {
     if (!isAdmin) return
     const check = () => {
-      if (isIdleExpired(readActivity(), Date.now())) { void signOut({ keepPush: true }); return }
+      if (isIdleExpired(readActivity(), Date.now())) { void signOut(); return }
       // Gece yarısı geçtiyse: aal2 oturum devam eder, cihaz güveniyle gelen oturum kod ekranına düşer.
       // Boş liste gösterilmesin diye sunucu yanıtı beklenmeden yeniden değerlendirilir.
       const trust = readDeviceTrust()
