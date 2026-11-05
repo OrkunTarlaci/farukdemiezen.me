@@ -13,7 +13,7 @@ function corsHeaders(origin, allowed) {
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-device-token",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin"
   };
@@ -186,7 +186,7 @@ async function handleSendRequest(req, deps) {
   if (!originAllowed(origin, deps.allowedOrigins)) return json(403, { error: "forbidden" });
   let admin = false;
   try {
-    admin = await deps.isAdmin(req.headers.get("authorization"));
+    admin = await deps.isAdmin(req.headers.get("authorization"), req.headers.get("x-device-token"));
   } catch {
     admin = false;
   }
@@ -228,10 +228,10 @@ if (!url || !serverKey || !publicKey || allowedOrigins.length === 0) {
     (req) => handleSendRequest(req, {
       provider,
       allowedOrigins,
-      isAdmin: async (authorization) => {
+      isAdmin: async (authorization, deviceToken) => {
         if (!authorization?.startsWith("Bearer ")) return false;
         const asUser = createClient(url, publicKey.key, {
-          global: { headers: { Authorization: authorization } },
+          global: { headers: { Authorization: authorization, ...deviceToken ? { "x-device-token": deviceToken } : {} } },
           auth: { persistSession: false, autoRefreshToken: false }
         });
         const { data, error } = await asUser.rpc("is_admin");

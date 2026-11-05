@@ -6,7 +6,7 @@ import type { ProcessSummary } from '../_shared/notifications.ts'
 
 export interface SendDeps {
   /** Authorization başlığındaki oturumun yönetici olup olmadığını sunucuda doğrular. */
-  isAdmin: (authorization: string | null) => Promise<boolean>
+  isAdmin: (authorization: string | null, deviceToken: string | null) => Promise<boolean>
   process: (appointmentId: string | null) => Promise<ProcessSummary>
   provider: { name: string; configured: boolean }
   allowedOrigins: string[]
@@ -25,7 +25,7 @@ export async function handleSendRequest(req: Request, deps: SendDeps): Promise<R
   if (!originAllowed(origin, deps.allowedOrigins)) return json(403, { error: 'forbidden' })
 
   let admin = false
-  try { admin = await deps.isAdmin(req.headers.get('authorization')) } catch { admin = false }
+  try { admin = await deps.isAdmin(req.headers.get('authorization'), req.headers.get('x-device-token')) } catch { admin = false }
   if (!admin) return json(403, { error: 'forbidden' })
 
   let body: { appointmentId?: unknown; statusOnly?: unknown } = {}

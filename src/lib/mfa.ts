@@ -1,4 +1,5 @@
 // Yönetici için iki adımlı giriş (TOTP). Sunucu tarafı denetim is_admin() içindedir (0011).
+import { clearDeviceTrust, readDeviceTrust, saveDeviceTrust } from './deviceToken'
 import { getSupabase } from './supabase'
 
 async function auth() {
@@ -32,6 +33,32 @@ export async function verifiedFactorId(): Promise<string | null> {
 export async function verifyCode(factorId: string, code: string): Promise<void> {
   const { error } = await (await auth()).mfa.challengeAndVerify({ factorId, code })
   if (error) throw error
+}
+
+/** Sunucu bu cihazı bugün için güvenilir sayıyorsa true. Kayıt yoksa veya süresi dolduysa cihazdaki değer silinir. */
+export async function deviceIsTrusted(): Promise<boolean> {
+  if (!readDeviceTrust()) return false
+  const supabase = await getSupabase()
+  const res = await supabase?.rpc('device_trust_expires')
+  if (res?.data) return true
+  if (!res?.error) clearDeviceTrust()
+  return false
+}
+
+/** Kod az önce doğrulandıysa bu cihaza gün sonuna kadar güven kaydı alır. Başarısız olursa kod yine her girişte istenir. */
+export async function trustThisDevice(): Promise<void> {
+  const supabase = await getSupabase()
+  const res = await supabase?.rpc('trust_this_device')
+  const data = res?.data as { token?: string; expires_at?: string } | null | undefined
+  if (data?.token && data.expires_at) saveDeviceTrust({ token: data.token, expiresAt: Date.parse(data.expires_at) })
+}
+
+/** Bu yöneticinin bütün cihazlarındaki güveni kaldırır (kayıp telefon). */
+export async function revokeTrustedDevices(): Promise<void> {
+  const supabase = await getSupabase()
+  const res = await supabase?.rpc('revoke_trusted_devices')
+  if (res?.error) throw res.error
+  clearDeviceTrust()
 }
 
 /** Yeni kurulum başlatır; yarım kalmış eski kurulumları önce temizler. */

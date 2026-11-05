@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
 import { ErrorPanel } from '../components/ui/feedback'
 import { inputClass } from '../components/ui/Field'
-import { removeFactor, startEnroll, verifiedFactorId, verifyCode } from '../lib/mfa'
+import { removeFactor, revokeTrustedDevices, startEnroll, trustThisDevice, verifiedFactorId, verifyCode } from '../lib/mfa'
 
 type Setup = { factorId: string; qrCode: string; secret: string }
 
@@ -27,12 +27,18 @@ export function MfaCard() {
   const confirm = () => run(async () => {
     if (!setup) return
     await verifyCode(setup.factorId, code.trim())
+    await trustThisDevice().catch(() => undefined)
     setFactorId(setup.factorId); setSetup(null); setCode('')
   }, 'Kod yanlış veya süresi doldu. Uygulamadaki yeni kodu yazın.')
   const remove = () => run(async () => {
     if (factorId) await removeFactor(factorId)
     setFactorId(null)
   }, 'Kapatılamadı. Çıkış yapıp kodla yeniden girin, sonra tekrar deneyin.')
+
+  const forget = () => run(async () => {
+    await revokeTrustedDevices()
+    window.location.reload()
+  }, 'Sıfırlanamadı. Sayfayı yenileyip tekrar deneyin.')
 
   if (factorId === undefined) return null
 
@@ -45,8 +51,12 @@ export function MfaCard() {
 
       {factorId && !setup && (
         <>
-          <p className="mt-1 text-sm text-muted">Açık. Girişte parolayla birlikte telefondaki kod istenir.</p>
-          <Button className="mt-3" variant="ghost" loading={busy} onClick={remove}>Kapat</Button>
+          <p className="mt-1 text-sm text-muted">Açık. Kod her cihazda günde bir kez istenir; gece 00.00'da yenilenir.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="secondary" disabled={busy} onClick={forget}>Cihazları Sıfırla</Button>
+            <Button variant="ghost" loading={busy} onClick={remove}>Kapat</Button>
+          </div>
+          <p className="mt-2 text-xs text-muted">Telefon kaybolursa Cihazları Sıfırla'ya basın ve parolanızı değiştirin.</p>
         </>
       )}
 

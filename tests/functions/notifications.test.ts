@@ -114,6 +114,12 @@ describe('send-notifications fonksiyonu', () => {
     expect(d.process).not.toHaveBeenCalled()
   })
 
+  it('güvenilir cihaz değerini yetki kontrolüne iletir', async () => {
+    const d = base()
+    await handleSendRequest(req({}, { 'x-device-token': 'cihaz' }), d)
+    expect(d.isAdmin).toHaveBeenCalledWith('Bearer jwt', 'cihaz')
+  })
+
   it('durum sorgusunda yalnızca sağlayıcı adı ve yapılandırma durumunu döndürür', async () => {
     const r = await handleSendRequest(req({ statusOnly: true }), base())
     expect(await r.json()).toEqual({ provider: { name: 'none', configured: false } })

@@ -43,6 +43,7 @@ async function setup(beforeOperations?: (db: PGlite) => Promise<void>) {
   await db.exec(sql('migrations/0009_push_subscriptions.sql'))
   await db.exec(sql('migrations/0010_booking_limit_after_captcha.sql'))
   await db.exec(sql('migrations/0011_security_hardening.sql'))
+  await db.exec(sql('migrations/0012_trusted_devices.sql'))
   await db.exec(`
     insert into auth.users values ('${ADMIN_ID}', 'faruk@example.com'), ('${USER_ID}', 'x@example.com');
     insert into admin_users values ('${ADMIN_ID}');
@@ -1095,6 +1096,132 @@ describe('güvenlik sertleştirmesi (0011)', () => {
     expect((await book({ start: at(futureDate(3), '15:00') })).reference_code).toMatch(/^FD-[A-Z2-9]{6}$/)
     await db.exec(sql('migrations/0011_security_hardening.sql'))
     expect((await db.query<any>('select bookings_per_ip_per_day n from private_settings')).rows[0].n).toBe(30)
+  })
+})
+
+describe('güvenilir cihaz (0012)', () => {
+  const now = () => Math.floor(Date.now() / 1000)
+  const claims = (aal: string, totpAt?: number) =>
+    JSON.stringify({ aal, amr: totpAt ? [{ method: 'totp', timestamp: totpAt }, { method: 'password', timestamp: totpAt }] : [{ method: 'password', timestamp: now() }] })
+  const session = async (jwt: string, token: string | null) => {
+    await db.query(`select set_config('request.jwt.claims', $1, false)`, [jwt])
+    await db.query(`select set_config('request.headers', $1, false)`, [token ? JSON.stringify({ 'x-device-token': token }) : ''])
+  }
+  const clear = () => session('', null)
+  const isAdminAs = async (user: string, jwt: string, token: string | null) => {
+    await session(jwt, token)
+    let ok = false
+    await asRole('authenticated', user, async () => { ok = (await db.query<{ a: boolean }>('select is_admin() a')).rows[0].a })
+    await clear()
+    return ok
+  }
+  const enrollAdmin = () => db.query(`insert into auth.mfa_factors (user_id, status) values ($1, 'verified')`, [ADMIN_ID])
+  const trust = async (user = ADMIN_ID, totpAt = now()) => {
+    await session(claims('aal2', totpAt), null)
+    let out: any
+    await asRole('authenticated', user, async () => { out = (await db.query<{ r: any }>('select trust_this_device() r')).rows[0].r })
+    await clear()
+    return out as { token: string; expires_at: string }
+  }
+
+  it('iki adımlı giriş açıkken: kod yoksa yönetici değil, güvenilir cihazda parola oturumu yönetici', async () => {
+    await enrollAdmin()
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), null)).toBe(false)
+    const t = await trust()
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), t.token)).toBe(true) // çıkış + parola girişi
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), null)).toBe(false) // başka cihaz
+  })
+
+  it('uydurma veya başka kullanıcının kaydı işe yaramaz; normal kullanıcı yönetici olamaz', async () => {
+    await enrollAdmin()
+    const t = await trust()
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), 'mfa-tamamlandi')).toBe(false)
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), t.token + 'x')).toBe(false)
+    expect(await isAdminAs(USER_ID, claims('aal1'), t.token)).toBe(false)
+    expect(await isAdminAs(USER_ID, claims('aal2', now()), t.token)).toBe(false)
+  })
+
+  it('her cihaz kendi kaydını alır; biri silinmeden diğeri çalışır', async () => {
+    await enrollAdmin()
+    const a = await trust()
+    const b = await trust()
+    expect(a.token).not.toBe(b.token)
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), a.token)).toBe(true)
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), b.token)).toBe(true)
+    expect((await db.query<any>('select token_hash from trusted_devices')).rows.some((r: any) => r.token_hash === a.token)).toBe(false) // ham değer saklanmaz
+  })
+
+  it('süresi dolunca kod yeniden gerekir ve yeni kayıt alınır', async () => {
+    await enrollAdmin()
+    const t = await trust()
+    await db.exec(`update trusted_devices set expires_at = now() - interval '1 second'`)
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), t.token)).toBe(false)
+    const fresh = await trust()
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), fresh.token)).toBe(true)
+    expect((await db.query('select * from trusted_devices')).rows).toHaveLength(1) // süresi dolan silindi
+  })
+
+  it('kayıt yalnızca az önce kod girmiş aal2 ile alınır', async () => {
+    await enrollAdmin()
+    const call = async (jwt: string, user = ADMIN_ID) => {
+      await session(jwt, null)
+      let err = ''
+      await asRole('authenticated', user, async () => { try { await db.query('select trust_this_device()') } catch (e) { err = (e as Error).message } })
+      await clear()
+      return err
+    }
+    expect(await call(claims('aal1'))).toBe('forbidden') // istemci aal2 iddia edemez
+    expect(await call(JSON.stringify({ aal: 'aal2', amr: [{ method: 'password', timestamp: now() }] }))).toBe('mfa_not_fresh')
+    expect(await call(claims('aal2', now() - 600))).toBe('mfa_not_fresh') // gece yarısını geçen eski aal2 oturumu
+    expect(await call(claims('aal2', now()), USER_ID)).toBe('forbidden')
+    await expectError(asRole('anon', null, async () => { await db.query('select trust_this_device()') }), 'permission denied')
+  })
+
+  it('aal2 oturum etkilenmez; cihaz güveniyle müşteri verisi okunur, cihazsız okunmaz', async () => {
+    await book({ start: at(futureDate(3), '15:00') })
+    await enrollAdmin()
+    expect(await isAdminAs(ADMIN_ID, claims('aal2', now()), null)).toBe(true)
+    const t = await trust()
+    const rows = async (token: string | null) => {
+      await session(claims('aal1'), token)
+      let n = -1
+      await asRole('authenticated', ADMIN_ID, async () => { n = (await db.query('select * from appointments')).rows.length })
+      await clear()
+      return n
+    }
+    expect(await rows(t.token)).toBe(1)
+    expect(await rows(null)).toBe(0)
+  })
+
+  it('gün sonu İstanbul saatine göre hesaplanır', async () => {
+    const next = async (at: string) => new Date((await db.query<{ m: string }>('select next_istanbul_midnight($1) m', [at])).rows[0].m).toISOString()
+    expect(await next('2026-11-05T15:00:00+03:00')).toBe('2026-11-05T21:00:00.000Z') // 6 Kasım 00.00 İstanbul
+    expect(await next('2026-11-05T23:59:59+03:00')).toBe('2026-11-05T21:00:00.000Z')
+    expect(await next('2026-11-06T00:00:00+03:00')).toBe('2026-11-06T21:00:00.000Z')
+    expect(await next('2026-11-05T22:30:00Z')).toBe('2026-11-06T21:00:00.000Z') // UTC'de 5 Kasım, İstanbul'da 6 Kasım
+  })
+
+  it('cihazları sıfırlama hepsini geçersiz kılar; tabloyu kimse doğrudan okuyamaz', async () => {
+    await enrollAdmin()
+    const t = await trust()
+    await session(claims('aal2', now()), null)
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await expectError(db.query('select * from trusted_devices'), 'permission denied')
+      await db.query('select revoke_trusted_devices()')
+    })
+    await clear()
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), t.token)).toBe(false)
+    await asRole('anon', null, async () => {
+      await expectError(db.query('select * from trusted_devices'), 'permission denied')
+      await expectError(db.query('select device_trust_expires()'), 'permission denied')
+      await expectError(db.query('select revoke_trusted_devices()'), 'permission denied')
+    })
+  })
+
+  it('iki adımlı giriş açmamış yönetici kilitlenmez; migration tekrar çalışır', async () => {
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), null)).toBe(true)
+    await db.exec(sql('migrations/0012_trusted_devices.sql'))
+    expect(await isAdminAs(ADMIN_ID, claims('aal1'), null)).toBe(true)
   })
 })
 

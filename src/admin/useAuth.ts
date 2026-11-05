@@ -2,8 +2,9 @@ import type { Session } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
 import { checkIsAdmin } from '../lib/api'
 import { toAppError } from '../lib/errors'
-import { IDLE_LIMIT_MS, isIdleExpired, readActivity, touchActivity } from '../lib/idle'
-import { mfaStepRequired, verifiedFactorId, verifyCode } from '../lib/mfa'
+import { isIdleExpired, readActivity, touchActivity } from '../lib/idle'
+import { clearDeviceTrust, readDeviceTrust } from '../lib/deviceToken'
+import { deviceIsTrusted, mfaStepRequired, trustThisDevice, verifiedFactorId, verifyCode } from '../lib/mfa'
 import { disablePush } from '../lib/push'
 import { getSupabase, isBackendConfigured } from '../lib/supabase'
 
@@ -23,7 +24,8 @@ export function useAuth() {
     if (!session) { setState({ status: 'signedOut' }); return }
     try {
       const email = session.user.email ?? ''
-      if (await mfaStepRequired()) { setState({ status: 'mfa', email }); return }
+      // Güvenilir cihaz kararı sunucunundur; cihazdaki değer tek başına yeterli değildir.
+      if ((await mfaStepRequired()) && !(await deviceIsTrusted())) { setState({ status: 'mfa', email }); return }
       // Yetki SUNUCUDA doğrulanır (is_admin). Arayüz yalnızca sonucu yansıtır; asıl koruma RLS'tir.
       const ok = await checkIsAdmin()
       setState(ok ? { status: 'admin', email } : { status: 'notAdmin', email })
@@ -62,6 +64,7 @@ export function useAuth() {
     const factorId = await verifiedFactorId()
     if (!factorId) throw new Error('no_factor')
     await verifyCode(factorId, code)
+    await trustThisDevice().catch(() => undefined)
     touchActivity()
     const supabase = await getSupabase()
     const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } }
@@ -81,7 +84,16 @@ export function useAuth() {
   const isAdmin = state.status === 'admin'
   useEffect(() => {
     if (!isAdmin) return
-    const check = () => { if (isIdleExpired(readActivity(), Date.now())) void signOut({ keepPush: true }) }
+    const check = () => {
+      if (isIdleExpired(readActivity(), Date.now())) { void signOut({ keepPush: true }); return }
+      // Gece yarısı geçtiyse: aal2 oturum devam eder, cihaz güveniyle gelen oturum kod ekranına düşer.
+      // Boş liste gösterilmesin diye sunucu yanıtı beklenmeden yeniden değerlendirilir.
+      const trust = readDeviceTrust()
+      if (trust && Date.now() >= trust.expiresAt) {
+        clearDeviceTrust()
+        void getSupabase().then((s) => s?.auth.getSession()).then((r) => evaluate(r?.data.session ?? null))
+      }
+    }
     let last = 0
     const activity = () => {
       const now = Date.now()
@@ -89,7 +101,7 @@ export function useAuth() {
     }
     check()
     if (readActivity() === null) touchActivity()
-    const timer = setInterval(check, Math.min(IDLE_LIMIT_MS, 300_000))
+    const timer = setInterval(check, 60_000)
     window.addEventListener('pointerdown', activity)
     window.addEventListener('keydown', activity)
     document.addEventListener('visibilitychange', check)
@@ -99,7 +111,7 @@ export function useAuth() {
       window.removeEventListener('keydown', activity)
       document.removeEventListener('visibilitychange', check)
     }
-  }, [isAdmin, signOut])
+  }, [isAdmin, signOut, evaluate])
 
   return { state, signIn, signOut, verifyMfa }
 }

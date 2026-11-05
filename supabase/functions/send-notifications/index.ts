@@ -32,11 +32,11 @@ if (!url || !serverKey || !publicKey || allowedOrigins.length === 0) {
     handleSendRequest(req, {
       provider,
       allowedOrigins,
-      isAdmin: async (authorization) => {
+      isAdmin: async (authorization, deviceToken) => {
         if (!authorization?.startsWith('Bearer ')) return false
         // Kullanıcının kendi oturumuyla is_admin() çağrılır; yetki veritabanında doğrulanır.
         const asUser = createClient(url, publicKey.key, {
-          global: { headers: { Authorization: authorization } },
+          global: { headers: { Authorization: authorization, ...(deviceToken ? { 'x-device-token': deviceToken } : {}) } },
           auth: { persistSession: false, autoRefreshToken: false },
         })
         const { data, error } = await asUser.rpc('is_admin')

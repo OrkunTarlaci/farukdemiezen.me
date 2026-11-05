@@ -199,6 +199,10 @@ Cloudflare'in test anahtarları (`1x000…AA`) da kullanılabilir ama gizli test
 
 CSP, GitHub Pages başlık ekleyemediği için `vite.config.ts` içinde meta etiketiyle üretilir. `frame-ancestors` ve `X-Content-Type-Options` meta ile verilemez; tam başlıklar için DNS Cloudflare proxy'sinden geçirilmelidir.
 
+### Güvenilir cihaz (0012)
+
+Supabase'de "cihazı hatırla" yoktur; her parola girişi `aal1` başlar. `0012` aal2'yi taklit etmez: kod girildikten sonra `trust_this_device()` cihaza rastgele bir değer verir, veritabanında özeti tutulur ve `is_admin()` `aal1` oturumu bu değer geçerliyse kabul eder. Süre İstanbul'da gün sonudur. Kayıt yalnızca son 5 dakikada TOTP girilmiş `aal2` oturumla alınır. Ayarlar → İki adımlı giriş → **Cihazları Sıfırla** hepsini iptal eder. Realtime istek başlığı taşımadığı için böyle bir oturumda liste 30 saniyede bir yoklamayla güncellenir.
+
 ### Telefon bildirimi (yeni randevu)
 
 Yeni randevu gelince yöneticinin telefonuna "Yeni randevunuz var, sistemden onaylayın." bildirimi gider. Ücretsizdir (Web Push). Bildirim boş gönderilir, metin `public/sw.js` içindedir; müşteri bilgisi bildirim servislerine gitmez.
