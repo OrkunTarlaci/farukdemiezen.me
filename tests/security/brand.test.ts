@@ -30,10 +30,14 @@ describe('marka dosyaları', () => {
     expect(read('public/sw.js')).toContain('icons/badge-96.png')
   })
 
+  it('header yeni logoyu, ana sayfa görseli çizgisel amblemi kullanır', () => {
+    expect(read('src/components/site/Header.tsx')).toContain('<Logo')
+    expect(read('src/components/site/Hero.tsx')).toContain('<Emblem')
+  })
+
   it('eski logo dosyaları ve FD monogramı kalmadı', () => {
     expect(existsSync(new URL('../../public/logo.svg', import.meta.url))).toBe(false)
     expect(existsSync(new URL('../../public/images/logo-512.png', import.meta.url))).toBe(false)
-    expect(existsSync(new URL('../../src/components/ui/Emblem.tsx', import.meta.url))).toBe(false)
     expect(read('src/components/ui/Logo.tsx')).not.toMatch(/>\s*FD\s*</)
   })
 })
