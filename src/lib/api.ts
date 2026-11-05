@@ -277,6 +277,15 @@ export async function markCancelNoticeOpened(id: string): Promise<void> {
   unwrap(await (await client()).rpc('admin_mark_cancel_notice', { p_id: id }))
 }
 
+/** Bu telefonu yeni randevu bildirimi için kaydeder / kaydını siler (0009). */
+export async function savePushSubscription(endpoint: string): Promise<void> {
+  unwrap(await (await client()).rpc('admin_save_push_subscription', { p_endpoint: endpoint }))
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  unwrap(await (await client()).rpc('admin_delete_push_subscription', { p_endpoint: endpoint }))
+}
+
 /** Yeniden planlama için uygun başlangıç anları: randevunun kendi süresiyle, kendisi hariç (ISO, UTC). */
 export async function fetchRescheduleSlots(id: string, date: string): Promise<string[]> {
   const res = await (await client()).rpc('admin_available_slots', { p_id: id, p_date: date })

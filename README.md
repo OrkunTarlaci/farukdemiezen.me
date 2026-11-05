@@ -191,6 +191,17 @@ Cloudflare'in test anahtarları (`1x000…AA`) da kullanılabilir ama gizli test
 
 `SUPABASE_URL` ve Supabase anahtarları otomatik sağlanır; elle girmeyin. Fonksiyonlar önce yeni anahtar sistemini (`SUPABASE_SECRET_KEYS`, `SUPABASE_PUBLISHABLE_KEYS`), yoksa eski anahtarları (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`) kullanır; Supabase eski anahtarları kullanımdan kaldırsa da çalışmaya devam eder. Hiçbiri bulunamazsa fonksiyon `server_not_configured` hatası döner ve Logs'a nedenini yazar (anahtarın kendisi yazılmaz).
 
+### Telefon bildirimi (yeni randevu)
+
+Yeni randevu gelince yöneticinin telefonuna "Yeni randevunuz var, sistemden onaylayın." bildirimi gider. Ücretsizdir (Web Push). Bildirim boş gönderilir, metin `public/sw.js` içindedir; müşteri bilgisi bildirim servislerine gitmez.
+
+1. `supabase/migrations/0009_push_subscriptions.sql` dosyasını SQL Editor'de çalıştırın.
+2. `VAPID_KEYS` adlı secret'ı ekleyin. Değer `node scripts/generate-vapid.mjs` ile üretilen `.env.vapid.local` dosyasındadır (git'e girmez). Açık anahtar `src/config/site.ts` → `push.vapidPublicKey` alanındadır; ikisi aynı çiftten olmalıdır.
+3. `create-booking` fonksiyonunu yeniden dağıtın.
+4. Telefonda panelde **Bildirimleri Aç**'a basın. iPhone'da önce paneli ana ekrana ekleyin.
+
+`VAPID_KEYS` yoksa veya tablo kurulmamışsa bildirim atlanır; randevu kaydı etkilenmez.
+
 ### Dağıtım — A) Supabase Dashboard ile (CLI gerekmez)
 
 Dashboard editörü fonksiyon klasörü dışındaki dosyaları (`_shared/`) göremediği için kaynak dosyalar doğrudan yapıştırılamaz. Bunun yerine kaynaktan otomatik üretilen tek dosyalık paket kullanılır:

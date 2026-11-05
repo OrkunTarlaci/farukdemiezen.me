@@ -11,6 +11,7 @@ import { toAppError } from '../../lib/errors'
 import type { AdminSettings } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
 import { PageHeader } from '../AdminLayout'
+import { PushCard } from '../PushCard'
 
 const toForm = (s: AdminSettings): SettingsFormValues => ({
   business_name: s.business_name,
@@ -190,6 +191,7 @@ export function SettingsPage() {
   return (
     <div>
       <PageHeader title="Ayarlar" description="Değişiklikler kaydedildiği anda müşteri sitesine yansır." />
+      <PushCard />
       <CleanupCard />
       <SmsStatusCard />
       {settings.loading && <Spinner label="Ayarlar yükleniyor…" />}

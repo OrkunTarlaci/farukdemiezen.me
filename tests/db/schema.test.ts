@@ -37,6 +37,7 @@ async function setup(beforeOperations?: (db: PGlite) => Promise<void>) {
   await db.exec(sql('migrations/0006_test_flag_notifications.sql'))
   await db.exec(sql('migrations/0007_daily_cleanup.sql'))
   await db.exec(sql('migrations/0008_bulk_cancel.sql'))
+  await db.exec(sql('migrations/0009_push_subscriptions.sql'))
   await db.exec(`
     insert into auth.users values ('${ADMIN_ID}', 'faruk@example.com'), ('${USER_ID}', 'x@example.com');
     insert into admin_users values ('${ADMIN_ID}');
@@ -940,6 +941,47 @@ describe('toplu iptal (0008)', () => {
     await asRole('authenticated', ADMIN_ID, async () => { await bulk([a], 'Neden') })
     await db.exec(sql('migrations/0008_bulk_cancel.sql'))
     expect((await db.query<any>('select cancellation_reason from appointments where id=$1', [a])).rows[0].cancellation_reason).toBe('Neden')
+  })
+})
+
+describe('telefon bildirimi kayıtları (0009)', () => {
+  const END = 'https://push.test/cihaz-1'
+  const count = async () => (await db.query<{ n: number }>('select count(*)::int n from push_subscriptions')).rows[0].n
+
+  it('yönetici kaydeder, aynı cihaz iki kez yazılmaz, silebilir', async () => {
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await db.query('select admin_save_push_subscription($1)', [END])
+      await db.query('select admin_save_push_subscription($1)', [END])
+    })
+    expect(await count()).toBe(1)
+    await asRole('authenticated', ADMIN_ID, async () => { await db.query('select admin_delete_push_subscription($1)', [END]) })
+    expect(await count()).toBe(0)
+  })
+
+  it('anonim ve yönetici olmayan kullanıcı yazamaz; tabloyu kimse doğrudan okuyamaz', async () => {
+    await asRole('anon', null, async () => {
+      await expect(db.query('select admin_save_push_subscription($1)', [END])).rejects.toThrow()
+      await expect(db.query('select * from push_subscriptions')).rejects.toThrow()
+    })
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await expect(db.query('select * from push_subscriptions')).rejects.toThrow()
+    })
+    await asRole('authenticated', '00000000-0000-0000-0000-00000000dead', async () => {
+      await expect(db.query('select admin_save_push_subscription($1)', [END])).rejects.toThrow()
+    })
+    expect(await count()).toBe(0)
+  })
+
+  it('https olmayan adresi reddeder; service_role okur ve siler', async () => {
+    await asRole('authenticated', ADMIN_ID, async () => {
+      await expect(db.query('select admin_save_push_subscription($1)', ['http://push.test/x'])).rejects.toThrow()
+      await db.query('select admin_save_push_subscription($1)', [END])
+    })
+    await asRole('service_role', null, async () => {
+      expect((await db.query('select endpoint from push_subscriptions')).rows).toHaveLength(1)
+      await db.query('delete from push_subscriptions where endpoint=$1', [END])
+    })
+    expect(await count()).toBe(0)
   })
 })
 

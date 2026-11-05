@@ -15,6 +15,7 @@ import { useLiveAppointments } from '../../lib/useLiveAppointments'
 import { AppointmentDialog } from '../AppointmentDialog'
 import { MoneyStat, PageHeader, StatCard } from '../AdminLayout'
 import { ContactActions } from '../ContactActions'
+import { PushCard } from '../PushCard'
 import { STATUS_LABELS, STATUS_TEXT, StatusBadge, TestBadge } from '../StatusBadge'
 
 const UPCOMING_DAYS = 30
@@ -119,6 +120,8 @@ export function OverviewPage() {
 
       {data.error && <div className="mb-4"><ErrorPanel message={data.error.message} onRetry={data.reload} /></div>}
       {!data.data && data.loading && <Spinner label="Özet yükleniyor…" />}
+
+      <PushCard hideWhenOn />
 
       {actionError && <div className="mb-4"><ErrorPanel message={actionError} /></div>}
 

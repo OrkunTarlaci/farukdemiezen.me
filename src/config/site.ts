@@ -14,6 +14,11 @@ export const siteConfig = {
     whatsappUrl: null as string | null,
   },
 
+  // Telefon bildirimi. Açık anahtar gizli değildir; gizli olan VAPID_KEYS yalnızca Supabase Secrets'tadır.
+  push: {
+    vapidPublicKey: 'BKOvvUaHv6AQOJ7e9fTdmDEfQy5x0veeBQsg5AHb-CP9Ode16n6G9cPuUsdSgpDLhPVKV0Ck2i0asJsMjRDrpDU' as string | null,
+  },
+
   hero: {
     headline: 'Temiz kesim. Düzenli sakal.',
     support: 'Saatinizi online ayırtın, sıra beklemeden gelin.',

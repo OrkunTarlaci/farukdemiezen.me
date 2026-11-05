@@ -6,6 +6,7 @@
 //   TEST_HOSTNAMES              — isteğe bağlı; varsayılan "localhost,127.0.0.1". Bu hostname'lerden
 //                                  gelen rezervasyonlar test olarak işaretlenir.
 //   SMS_PROVIDER                — isteğe bağlı; şimdilik "none" (SMS gönderilmez, kuyrukta "atlandı" görünür)
+//   VAPID_KEYS                  — isteğe bağlı; "<açık>.<gizli>" (scripts/generate-vapid.mjs). Yoksa telefon bildirimi gönderilmez
 //   SUPABASE_URL ve sunucu anahtarı — Supabase tarafından otomatik sağlanır: önce SUPABASE_SECRET_KEYS
 //                                  (yeni), yoksa SUPABASE_SERVICE_ROLE_KEY (eski). Elle girilmez.
 // Dağıtım: supabase functions deploy create-booking --no-verify-jwt  (README, bölüm 4)
@@ -14,6 +15,7 @@ import { misconfiguredResponse, parseList } from '../_shared/http.ts'
 import { resolveServerKey } from '../_shared/keys.ts'
 import { createNotificationDeps, selectProvider } from '../_shared/notificationDeps.ts'
 import { processNotifications } from '../_shared/notifications.ts'
+import { notifyNewBooking, parseVapidKeys } from '../_shared/push.ts'
 import { DEFAULT_TEST_HOSTNAMES, handleRequest, verifyTurnstileWithCloudflare } from './handler.ts'
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined
@@ -34,6 +36,21 @@ if (!url || !serverKey) {
   const admin = createClient(url, serverKey.key, { auth: { persistSession: false, autoRefreshToken: false } })
   const notificationDeps = createNotificationDeps(admin, selectProvider(env('SMS_PROVIDER')))
   const testHostnames = parseList(env('TEST_HOSTNAMES'))
+  const pushKeys = parseVapidKeys(env('VAPID_KEYS'))
+  // Yöneticinin telefonuna bildirim. Tablo yoksa veya gönderim başarısızsa randevu etkilenmez.
+  const pushNewBooking = async () => {
+    if (!pushKeys) return
+    const summary = await notifyNewBooking({
+      keys: pushKeys,
+      listEndpoints: async () => {
+        const { data, error } = await admin.from('push_subscriptions').select('endpoint')
+        if (error) throw error
+        return (data ?? []).map((r: { endpoint: string }) => r.endpoint)
+      },
+      removeEndpoint: async (endpoint) => { await admin.from('push_subscriptions').delete().eq('endpoint', endpoint) },
+    })
+    log({ status: 0, code: 'push', ...summary })
+  }
 
   Deno.serve((req) =>
     handleRequest(req, {
@@ -51,9 +68,12 @@ if (!url || !serverKey) {
       allowedOrigins,
       allowedHostnames: parseList(env('TURNSTILE_ALLOWED_HOSTNAMES')),
       testHostnames: testHostnames.length ? testHostnames : DEFAULT_TEST_HOSTNAMES,
-      // SMS, yanıtı geciktirmemek için arka planda gönderilir; hatası randevuyu etkilemez.
+      // SMS ve telefon bildirimi, yanıtı geciktirmemek için arka planda gönderilir; hataları randevuyu etkilemez.
       afterBooking: async (appointmentId) => {
-        const job = processNotifications(notificationDeps, appointmentId).catch(() => undefined)
+        const job = Promise.all([
+          processNotifications(notificationDeps, appointmentId).catch(() => undefined),
+          pushNewBooking().catch(() => log({ status: 0, code: 'push_failed' })),
+        ])
         if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(job)
         else await job
       },

@@ -164,6 +164,64 @@ function createNotificationDeps(admin, provider) {
   };
 }
 
+// supabase/functions/_shared/push.ts
+var SUBJECT = "https://www.orkuntarlaci.me";
+var TOKEN_SECONDS = 12 * 60 * 60;
+var toB64Url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function fromB64Url(s) {
+  const raw = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+function parseVapidKeys(value) {
+  const [publicKey, privateKey, extra] = (value ?? "").trim().split(".");
+  if (!publicKey || !privateKey || extra !== void 0) return null;
+  try {
+    if (fromB64Url(publicKey).length !== 65 || fromB64Url(privateKey).length !== 32) return null;
+  } catch {
+    return null;
+  }
+  return { publicKey, privateKey };
+}
+async function vapidAuthorization(endpoint, keys, nowMs) {
+  const pub = fromB64Url(keys.publicKey);
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    { kty: "EC", crv: "P-256", d: keys.privateKey, x: toB64Url(pub.slice(1, 33)), y: toB64Url(pub.slice(33, 65)), ext: true },
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
+  const text = (o) => toB64Url(new TextEncoder().encode(JSON.stringify(o)));
+  const unsigned = `${text({ typ: "JWT", alg: "ES256" })}.${text({
+    aud: new URL(endpoint).origin,
+    exp: Math.floor(nowMs / 1e3) + TOKEN_SECONDS,
+    sub: SUBJECT
+  })}`;
+  const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(unsigned));
+  return `vapid t=${unsigned}.${toB64Url(new Uint8Array(signature))}, k=${keys.publicKey}`;
+}
+async function notifyNewBooking(deps) {
+  const send = deps.send ?? fetch;
+  const now = deps.now?.() ?? Date.now();
+  const summary = { sent: 0, removed: 0, failed: 0 };
+  for (const endpoint of await deps.listEndpoints()) {
+    try {
+      const res = await send(endpoint, {
+        method: "POST",
+        headers: { Authorization: await vapidAuthorization(endpoint, deps.keys, now), TTL: "86400", Urgency: "high", "Content-Length": "0" }
+      });
+      if (res.ok) summary.sent++;
+      else if (res.status === 404 || res.status === 410) {
+        await deps.removeEndpoint(endpoint);
+        summary.removed++;
+      } else summary.failed++;
+    } catch {
+      summary.failed++;
+    }
+  }
+  return summary;
+}
+
 // supabase/functions/create-booking/handler.ts
 var TURNSTILE_ACTION = "booking";
 var MAX_BODY_BYTES = 8e3;
@@ -301,6 +359,22 @@ if (!url || !serverKey) {
   const admin = createClient(url, serverKey.key, { auth: { persistSession: false, autoRefreshToken: false } });
   const notificationDeps = createNotificationDeps(admin, selectProvider(env("SMS_PROVIDER")));
   const testHostnames = parseList(env("TEST_HOSTNAMES"));
+  const pushKeys = parseVapidKeys(env("VAPID_KEYS"));
+  const pushNewBooking = async () => {
+    if (!pushKeys) return;
+    const summary = await notifyNewBooking({
+      keys: pushKeys,
+      listEndpoints: async () => {
+        const { data, error } = await admin.from("push_subscriptions").select("endpoint");
+        if (error) throw error;
+        return (data ?? []).map((r) => r.endpoint);
+      },
+      removeEndpoint: async (endpoint) => {
+        await admin.from("push_subscriptions").delete().eq("endpoint", endpoint);
+      }
+    });
+    log({ status: 0, code: "push", ...summary });
+  };
   Deno.serve(
     (req) => handleRequest(req, {
       captchaConfigured: secret !== "",
@@ -317,9 +391,12 @@ if (!url || !serverKey) {
       allowedOrigins,
       allowedHostnames: parseList(env("TURNSTILE_ALLOWED_HOSTNAMES")),
       testHostnames: testHostnames.length ? testHostnames : DEFAULT_TEST_HOSTNAMES,
-      // SMS, yanıtı geciktirmemek için arka planda gönderilir; hatası randevuyu etkilemez.
+      // SMS ve telefon bildirimi, yanıtı geciktirmemek için arka planda gönderilir; hataları randevuyu etkilemez.
       afterBooking: async (appointmentId) => {
-        const job = processNotifications(notificationDeps, appointmentId).catch(() => void 0);
+        const job = Promise.all([
+          processNotifications(notificationDeps, appointmentId).catch(() => void 0),
+          pushNewBooking().catch(() => log({ status: 0, code: "push_failed" }))
+        ]);
         if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(job);
         else await job;
       },
