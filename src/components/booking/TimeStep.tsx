@@ -11,8 +11,23 @@ interface Props {
   onSelect: (slotIso: string | undefined) => void
 }
 
+const REFRESH_MS = 20_000
+
 export function TimeStep({ date, serviceId, value, onSelect }: Props) {
-  const { data, error, loading, reload } = useAsync(() => fetchAvailableSlots(date, serviceId), [date, serviceId])
+  const { data, error, loading, reload, refresh } = useAsync(() => fetchAvailableSlots(date, serviceId), [date, serviceId])
+
+  // Sayfa açık kalsa da alınan saat listeden düşer (başka cihazda alınan randevu dahil).
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === 'visible') refresh() }
+    const timer = setInterval(tick, REFRESH_MS)
+    document.addEventListener('visibilitychange', tick)
+    window.addEventListener('focus', tick)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
+      window.removeEventListener('focus', tick)
+    }
+  }, [refresh])
 
   // Seçili saat artık listede yoksa (başkası aldı) seçimi temizle
   useEffect(() => {

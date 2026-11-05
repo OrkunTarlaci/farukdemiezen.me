@@ -6,6 +6,8 @@ export interface AsyncState<T> {
   error: AppError | null
   loading: boolean
   reload: () => void
+  /** Ekrandaki veriyi yükleniyor göstermeden tazeler; hata olursa mevcut veri kalır. */
+  refresh: () => void
 }
 
 /**
@@ -31,6 +33,11 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], enabled = tru
     )
   }, [])
 
+  const refresh = useCallback(() => {
+    const id = ++run.current
+    fnRef.current().then((d) => { if (id === run.current) { setData(d); setLoading(false) } }, () => { if (id === run.current) setLoading(false) })
+  }, [])
+
   useEffect(() => {
     if (!enabled) { run.current++; setLoading(false); return }
     setData(undefined)
@@ -39,5 +46,5 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], enabled = tru
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, ...deps])
 
-  return { data, error, loading, reload: load }
+  return { data, error, loading, reload: load, refresh }
 }

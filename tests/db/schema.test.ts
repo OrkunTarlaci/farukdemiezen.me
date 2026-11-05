@@ -166,6 +166,17 @@ describe('rezervasyon oluşturma', () => {
     expect(row.customer_phone).toBe('+905321112233')
   })
 
+  it('onay bekleyen ve onaylı randevunun saati listeden düşer; iptal edilince geri gelir', async () => {
+    const d = futureDate(3)
+    const r = await book({ start: at(d, '10:30') })
+    expect(await slotsOf(d)).not.toContain('10:30') // onay bekliyor
+    const id = (await db.query<{ id: string }>('select id from appointments where reference_code=$1', [r.reference_code])).rows[0].id
+    await asRole('authenticated', ADMIN_ID, async () => { await db.query(`select admin_set_appointment_status($1,'confirmed')`, [id]) })
+    expect(await slotsOf(d)).not.toContain('10:30') // onaylı
+    await asRole('authenticated', ADMIN_ID, async () => { await db.query(`select admin_set_appointment_status($1,'cancelled')`, [id]) })
+    expect(await slotsOf(d)).toContain('10:30') // iptal
+  })
+
   it('aynı saati ikinci kez almayı reddeder', async () => {
     const d = futureDate(3)
     await book({ start: at(d, '10:00') })
