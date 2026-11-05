@@ -19,7 +19,7 @@ export function Footer({ settings, workingHours }: Props) {
     <footer className="pb-8 pt-12">
       <div className="container-page grid gap-10 md:grid-cols-[1.3fr_1fr_1fr]">
         <div className="max-w-sm">
-          <Logo name={settings?.business_name} />
+          <Logo className="h-12" />
           <p className="mt-4 text-xs leading-relaxed text-muted">{siteConfig.privacy.summary}</p>
         </div>
 

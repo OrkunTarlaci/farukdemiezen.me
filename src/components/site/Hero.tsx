@@ -5,7 +5,7 @@ import { summarizeWorkingHours } from '../../lib/hours'
 import { scrollToId } from '../../lib/nav'
 import type { BusinessSettings, WorkingHours } from '../../lib/types'
 import { Button } from '../ui/Button'
-import { Emblem } from '../ui/Emblem'
+import { Monogram } from '../ui/Logo'
 
 function Highlight({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
@@ -58,8 +58,8 @@ export function Hero({ settings, workingHours }: Props) {
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-bg/60 via-transparent to-transparent" aria-hidden />
             </>
           ) : (
-            <div className="h-full w-full bg-[radial-gradient(circle_at_50%_45%,rgb(var(--accent)/0.12),transparent_65%)] p-3 sm:p-6">
-              <Emblem className="h-full w-full" label={hero.imageAlt} />
+            <div className="h-full w-full p-12 sm:p-20">
+              <Monogram className="h-full w-full" decorative={false} />
             </div>
           )}
         </div>

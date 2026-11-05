@@ -55,7 +55,7 @@ export function Header({ showLocation, businessName }: Props) {
           aria-label={`${businessName || siteConfig.name} — sayfanın başına dön`}
           className="rounded-lg"
         >
-          <Logo name={businessName} />
+          <Logo decorative className="h-10 lg:h-11" />
         </a>
 
         <nav aria-label="Ana menü" className="hidden items-center gap-1 md:flex">
@@ -79,7 +79,8 @@ export function Header({ showLocation, businessName }: Props) {
         </nav>
 
         <div className="flex items-center gap-2 md:hidden">
-          <Button size="sm" onClick={() => go('randevu')}>Randevu Al</Button>
+          {/* Dar ekranda logo öne çıkar; Randevu Al ana sayfada ve menüde kalır. */}
+          <span className="hidden min-[420px]:block"><Button size="sm" onClick={() => go('randevu')}>Randevu Al</Button></span>
           <button
             type="button"
             aria-expanded={open}
@@ -96,6 +97,9 @@ export function Header({ showLocation, businessName }: Props) {
       {open && (
         <nav id="mobil-menu" aria-label="Mobil menü" className="border-t border-line bg-bg md:hidden">
           <ul className="container-page py-2">
+            <li className="min-[420px]:hidden">
+              <Button className="my-1 w-full" onClick={() => go('randevu')} icon={<CalendarDays className="h-4 w-4" aria-hidden />}>Randevu Al</Button>
+            </li>
             {items.map((i) => (
               <li key={i.id}>
                 <a

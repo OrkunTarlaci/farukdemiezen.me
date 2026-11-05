@@ -114,3 +114,18 @@ describe('çalışma saati özeti', () => {
     ])
   })
 })
+
+describe('09:00–20:00 çizelgesi', () => {
+  it('panel 30 dakikalık 22 satır gösterir, İstanbul saatiyle kayma olmaz', () => {
+    const rows = buildDaySchedule({
+      date: '2026-11-09',
+      workingHours: { weekday: 1, is_closed: false, opens_at: '09:00:00', closes_at: '20:00:00', break_starts_at: null, break_ends_at: null },
+      intervalMinutes: 30,
+      appointments: [],
+      blockedPeriods: [],
+    })
+    expect(rows).toHaveLength(22)
+    expect(timeOfInstant(rows[0].start)).toBe('09:00')
+    expect(timeOfInstant(rows[21].start)).toBe('19:30')
+  })
+})

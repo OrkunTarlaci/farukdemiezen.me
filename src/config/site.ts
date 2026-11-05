@@ -4,8 +4,6 @@
 export const siteConfig = {
   name: 'Faruk Demirezen',
   tagline: 'Erkek Kuaförü',
-  // Onaylı logo dosyası eklendiğinde (örn. 'images/logo.svg') buraya yazın; null ise "FD" monogramı çizilir.
-  logoUrl: null as string | null,
 
   // Sosyal medya. Tam bağlantıyı tırnak içine yazın, örn. 'https://www.instagram.com/kullaniciadi/'.
   // null ise görünmez. whatsappUrl boşsa panelde Ayarlar > Telefon alanındaki cep numarası kullanılır.
@@ -45,6 +43,8 @@ export const siteConfig = {
       { title: 'Saç kesimi', text: 'Klasik ya da modern. Yüz hattınıza, saç yapınıza ve günlük düzeninize uygun bir kesim.' },
       { title: 'Sakal tasarımı', text: 'Temiz çizgiler, doğru uzunluk. Yüzünüzün oranına göre şekillenen bir sakal.' },
       { title: 'Kişisel bakım', text: 'İyi görünümü küçük ayrıntılar tamamlar. Bitirirken her detaya özen gösterilir.' },
+      { title: 'Kişiye özel stil', text: 'Herkese aynı kesim yapılmaz. Tarzınız, işiniz ve tercihiniz neyse iş ona göre şekillenir.' },
+      { title: 'Profesyonel yaklaşım', text: 'Saatiniz size ayrılır. Acele edilmez, iş temiz ve düzenli biter.' },
       { title: 'Müşteri memnuniyeti', text: 'Asıl ölçü aynadaki görüntü değil; koltuktan kendinizi iyi hissederek kalkmanız.' },
     ],
     // Hikâye bölümleri. Başlıklar değiştirilebilir, bölüm eklenip çıkarılabilir.

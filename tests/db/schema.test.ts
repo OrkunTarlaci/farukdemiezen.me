@@ -1266,6 +1266,27 @@ describe('çalışma saatleri 09:00–20:00 (0013)', () => {
     expect((await book({ start: at(d, '19:30') })).reference_code).toBeTruthy()
   })
 
+  it('09:00 ve 09:30 alınabilir; aynı saat ikinci kez alınamaz; iptal edilen saat geri gelir', async () => {
+    await apply()
+    const d = futureDate(5)
+    const first = await book({ start: at(d, '09:00') })
+    expect(first.reference_code).toBeTruthy()
+    const second = await book({ start: at(d, '09:30'), phone: '0533 222 33 44' })
+    await expectError(book({ start: at(d, '09:30'), phone: '0533 222 33 45' }), 'slot_unavailable')
+    const id = (await db.query<{ id: string }>('select id from appointments where reference_code=$1', [second.reference_code])).rows[0].id
+    expect(await slotsOf(d)).not.toContain('09:30')
+    await asRole('authenticated', ADMIN_ID, async () => { await db.query(`select admin_set_appointment_status($1,'cancelled')`, [id]) })
+    expect(await slotsOf(d)).toContain('09:30')
+  })
+
+  it('yönetim panelinin okuduğu saatler müşteri takvimiyle aynı', async () => {
+    await apply()
+    const wh = (await db.query<any>('select opens_at, closes_at from working_hours where weekday = 1')).rows[0]
+    expect([wh.opens_at.slice(0, 5), wh.closes_at.slice(0, 5)]).toEqual(['09:00', '20:00'])
+    const s = await slotsOf(futureDate(1))
+    expect(s[0]).toBe(wh.opens_at.slice(0, 5))
+  })
+
   it('Pazar kapalı kalır; kapalı olan başka gün de açılmaz', async () => {
     await db.exec('update working_hours set is_closed = true where weekday = 3')
     await apply()

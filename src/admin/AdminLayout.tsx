@@ -3,7 +3,7 @@ import { Suspense, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Dialog } from '../components/ui/Dialog'
 import { Spinner } from '../components/ui/feedback'
-import { Monogram } from '../components/ui/Logo'
+import { Logo } from '../components/ui/Logo'
 import { formatPrice } from '../lib/time'
 import { usePendingCount } from './usePendingCount'
 
@@ -103,8 +103,7 @@ export function AdminLayout({ email, onSignOut }: Props) {
       {/* Masaüstü kenar çubuğu */}
       <aside className="hidden border-r border-line bg-surface/60 lg:flex lg:min-h-screen lg:flex-col">
         <div className="flex h-16 items-center gap-3 border-b border-line px-5">
-          <Monogram className="h-11 w-11" />
-          <span className="text-sm font-semibold">Yönetim Paneli</span>
+          <Logo className="h-9" />
         </div>
         <nav aria-label="Yönetim menüsü" className="flex-1 space-y-1 p-3">
           {NAV.map(({ to, label, icon: Icon, ...rest }) => (

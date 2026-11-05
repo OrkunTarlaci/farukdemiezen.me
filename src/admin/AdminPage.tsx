@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { ErrorPanel, Spinner } from '../components/ui/feedback'
-import { Monogram } from '../components/ui/Logo'
+import { Logo } from '../components/ui/Logo'
 import { AdminLayout } from './AdminLayout'
 import { OverviewPage } from './pages/OverviewPage'
 import { LoginForm } from './LoginForm'
@@ -47,7 +47,7 @@ export function AdminPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
       <div className="mb-8 flex flex-col items-center gap-3">
-        <Monogram className="h-24 w-24" />
+        <Logo className="h-12 sm:h-14" />
         <p className="text-xs font-medium uppercase tracking-[0.28em] text-muted">Yönetim Paneli</p>
       </div>
 
