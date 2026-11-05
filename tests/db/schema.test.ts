@@ -886,6 +886,7 @@ describe('test randevusu ve bildirim kuyruğu (0006)', () => {
 
 describe('şema teşhis sorgusu (supabase/diagnostics/schema_check.sql)', () => {
   it('tüm migration\'lar uygulanmış veritabanında her kontrol TAMAM döner (Realtime yayını PGlite\'ta yok)', async () => {
+    await db.exec(sql('migrations/0015_hourly_appointments.sql'))
     const rows = (await db.query<{ migration: string; kontrol: string; durum: string }>(sql('diagnostics/schema_check.sql'))).rows
     expect(rows.length).toBeGreaterThan(25)
     const missing = rows.filter((r) => r.durum !== 'TAMAM').map((r) => `${r.migration}: ${r.kontrol}`)
@@ -1236,6 +1237,112 @@ describe('güvenilir cihaz (0012)', () => {
   })
 })
 
+describe('saat başı randevu düzeni (0015)', () => {
+  const WEEKDAY_SLOTS = ['11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00']
+  const SATURDAY_SLOTS = ['10:00', ...WEEKDAY_SLOTS, '20:00', '21:00']
+  const apply = async () => {
+    await db.exec(sql('migrations/0013_working_hours_0900_2000.sql')) // canlıdaki başlangıç durumu
+    await db.exec(sql('migrations/0015_hourly_appointments.sql'))
+    await db.exec(`update private_settings set public_queries_per_ip_per_minute = 1000`)
+  }
+  const asAdmin = (fn: () => Promise<void>) => asRole('authenticated', ADMIN_ID, fn)
+
+  it('her hizmette hafta içi 11–19, Cumartesi 10–21 sunulur; yarım saat yok', async () => {
+    await apply()
+    for (const service of Object.keys(serviceIds)) {
+      for (const weekday of [1, 2, 3, 4, 5]) expect(await slotsOf(futureDate(weekday), service)).toEqual(WEEKDAY_SLOTS)
+      expect(await slotsOf(futureDate(6), service)).toEqual(SATURDAY_SLOTS)
+    }
+  })
+
+  it('Pazar kapanır: açık bırakılmış olsa da saat sunulmaz, takvimde çıkmaz, randevu alınmaz', async () => {
+    await db.exec('update working_hours set is_closed = false where weekday = 7')
+    await apply()
+    const sunday = futureDate(7)
+    expect(await slotsOf(sunday)).toEqual([])
+    const days = await db.query<{ day: string }>('select day::text from get_available_dates($1,$2,$3)', [serviceIds['Saç Kesimi'], sunday, sunday])
+    expect(days.rows).toEqual([])
+    await expectError(book({ start: at(sunday, '11:00') }), 'slot_invalid')
+  })
+
+  it('kapalı günün yarım saatli eski açılışı migration akışını durdurmaz; kapalı gün açılmaz', async () => {
+    await db.exec(`update working_hours set is_closed = true, opens_at = '09:30' where weekday = 3`)
+    await db.exec(`update working_hours set opens_at = '09:30' where weekday = 7`)
+    await apply()
+    expect(await slotsOf(futureDate(3))).toEqual([])
+    const rows = (await db.query<any>('select opens_at from working_hours where weekday in (3, 7)')).rows
+    expect(rows.map((r: any) => r.opens_at.slice(0, 5))).toEqual(['09:00', '09:00'])
+  })
+
+  it('sunucu yarım saati, saat dışını ve kapanışı aşan randevuyu reddeder', async () => {
+    await apply()
+    const d = futureDate(2)
+    const sat = futureDate(6)
+    for (const t of ['10:00', '10:30', '11:30', '19:30', '20:00']) await expectError(book({ start: at(d, t) }), 'slot_invalid')
+    for (const t of ['09:00', '10:30', '21:30', '22:00']) await expectError(book({ start: at(sat, t) }), 'slot_invalid')
+    expect((await book({ service: 'Saç + Sakal', start: at(d, '19:00') })).reference_code).toBeTruthy()
+    expect((await book({ service: 'Saç + Sakal', start: at(sat, '21:00'), phone: '0533 222 33 44' })).reference_code).toBeTruthy()
+  })
+
+  it('hizmet süresi kapanışı aşıyorsa son saat sunulmaz', async () => {
+    await apply()
+    await db.exec(`update services set duration_minutes = 70 where name = 'Saç + Sakal'`)
+    const d = futureDate(1)
+    expect((await slotsOf(d, 'Saç + Sakal')).at(-1)).toBe('18:00')
+    expect((await slotsOf(futureDate(6), 'Saç + Sakal')).at(-1)).toBe('20:00')
+    await expectError(book({ service: 'Saç + Sakal', start: at(d, '19:00') }), 'slot_invalid')
+  })
+
+  it('panelden aralık değiştirilemez, yarım saat açılış kaydedilemez; tam saat kaydedilir', async () => {
+    await apply()
+    await asAdmin(async () => {
+      await expectError(db.query('update business_settings set booking_interval_minutes = 30 where id = 1'), 'check constraint')
+      await expectError(db.query(`update working_hours set opens_at = '10:30' where weekday = 1`), 'check constraint')
+      await db.query(`update working_hours set opens_at = '12:00' where weekday = 1`)
+    })
+    expect((await slotsOf(futureDate(1)))[0]).toBe('12:00')
+    await expectError(db.exec(`update working_hours set opens_at = '11:00:30' where weekday = 1`), 'check constraint')
+  })
+
+  it('molaya denk gelen saat sunulmaz', async () => {
+    await apply()
+    await db.exec(`update working_hours set break_starts_at = '13:00', break_ends_at = '14:00' where weekday = 3`)
+    expect(await slotsOf(futureDate(3))).toEqual(WEEKDAY_SLOTS.filter((t) => t !== '13:00'))
+  })
+
+  it('mevcut randevular değişmez; yarım saatli randevu onaylanır ve çakışmayı engellemeye devam eder', async () => {
+    const d = futureDate(4)
+    const early = await book({ start: at(d, '10:30') })
+    const half = await book({ start: at(d, '12:30'), phone: '0533 222 33 44' })
+    const snapshot = () => db.query<any>('select * from appointments order by id').then((r) => r.rows)
+    const before = await snapshot()
+    await apply()
+    expect(await snapshot()).toEqual(before)
+    expect(await slotsOf(d, 'Saç + Sakal')).not.toContain('12:00') // 12:00–12:50, 12:30 ile çakışır
+    expect(await slotsOf(d)).toContain('12:00') // 12:00–12:30 sığar
+    const idOf = async (code: string) => (await db.query<{ id: string }>('select id from appointments where reference_code=$1', [code])).rows[0].id
+    const earlyId = await idOf(early.reference_code)
+    const halfId = await idOf(half.reference_code)
+    await asAdmin(async () => {
+      await db.query(`select admin_set_appointment_status($1,'confirmed')`, [earlyId])
+      await expectError(db.query('select admin_reschedule_appointment($1,$2)', [halfId, at(d, '13:30')]), 'slot_invalid')
+      await db.query('select admin_reschedule_appointment($1,$2)', [halfId, at(d, '13:00')])
+      const slots = await db.query<any>('select slot_start from admin_available_slots($1,$2)', [halfId, d])
+      expect(slots.rows.length).toBeGreaterThan(0)
+      expect(slots.rows.every((r: any) => new Date(r.slot_start).getUTCMinutes() === 0)).toBe(true)
+    })
+  })
+
+  it('tekrar çalıştırılabilir; temiz kurulumda seed varsayılanı kısıtla çelişmez', async () => {
+    await apply()
+    await db.exec(sql('migrations/0015_hourly_appointments.sql'))
+    expect(await slotsOf(futureDate(1))).toEqual(WEEKDAY_SLOTS)
+    await db.exec('delete from business_settings')
+    await db.exec(sql('seed.sql'))
+    expect((await db.query<any>('select booking_interval_minutes from business_settings')).rows[0].booking_interval_minutes).toBe(60)
+  })
+})
+
 describe('çalışma saatleri 09:00–20:00 (0013)', () => {
   const apply = async () => {
     await db.exec(`update business_settings set booking_interval_minutes = 60`)
@@ -1285,22 +1392,6 @@ describe('çalışma saatleri 09:00–20:00 (0013)', () => {
     expect([wh.opens_at.slice(0, 5), wh.closes_at.slice(0, 5)]).toEqual(['09:00', '20:00'])
     const s = await slotsOf(futureDate(1))
     expect(s[0]).toBe(wh.opens_at.slice(0, 5))
-  })
-
-  it('saat başı düzeninde yarım saat sunulmaz; hafta içi 11–19, Cumartesi 10–21', async () => {
-    await apply()
-    await db.exec(`update working_hours set opens_at='11:00', closes_at='20:00' where weekday between 1 and 5`)
-    await db.exec(`update working_hours set opens_at='10:00', closes_at='22:00' where weekday = 6`)
-    await asRole('authenticated', ADMIN_ID, async () => {
-      await db.query('update business_settings set booking_interval_minutes = 60 where id = 1') // panelin yaptığı yazma
-    })
-    expect(await slotsOf(futureDate(1))).toEqual(['11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'])
-    const sat = await slotsOf(futureDate(6))
-    expect(sat[0]).toBe('10:00')
-    expect(sat.at(-1)).toBe('21:00')
-    expect(sat.some((t) => t.endsWith(':30'))).toBe(false)
-    expect((await slotsOf(futureDate(1), 'Saç + Sakal')).at(-1)).toBe('19:00')
-    await expectError(book({ start: at(futureDate(2), '11:30') }), 'slot_invalid')
   })
 
   it('Pazar kapalı kalır; kapalı olan başka gün de açılmaz', async () => {

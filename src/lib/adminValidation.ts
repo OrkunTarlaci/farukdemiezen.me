@@ -96,7 +96,6 @@ const optionalText = (max: number) =>
 
 export const settingsSchema = z.object({
   business_name: z.string().trim().min(1, 'İşletme adı gerekli.').max(80, 'En fazla 80 karakter.'),
-  booking_interval_minutes: z.coerce.number({ message: 'Sayı girin.' }).int('Tam sayı girin.').min(5, 'En az 5.').max(120, 'En fazla 120.'),
   minimum_booking_notice_minutes: z.coerce.number({ message: 'Sayı girin.' }).int('Tam sayı girin.').min(0, 'En az 0.').max(10080, 'En fazla 10080 (7 gün).'),
   maximum_booking_horizon_days: z.coerce.number({ message: 'Sayı girin.' }).int('Tam sayı girin.').min(1, 'En az 1.').max(365, 'En fazla 365.'),
   max_active_bookings_per_phone: z.coerce.number({ message: 'Sayı girin.' }).int('Tam sayı girin.').min(1, 'En az 1.').max(20, 'En fazla 20.'),

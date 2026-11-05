@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button'
 import { Dialog } from '../../components/ui/Dialog'
 import { EmptyState, ErrorPanel, Spinner, SuccessNote } from '../../components/ui/feedback'
 import { Field, inputClass, selectClass } from '../../components/ui/Field'
-import { createBlockedPeriod, deleteBlockedPeriod, fetchUpcomingBlocked, fetchWorkingHours, setHourlyAppointments, updateWorkingHours } from '../../lib/api'
+import { createBlockedPeriod, deleteBlockedPeriod, fetchUpcomingBlocked, fetchWorkingHours, updateWorkingHours } from '../../lib/api'
 import {
   blockedPeriodSchema, blockedRange, workingHoursSchema, type BlockedPeriodFormValues, type WorkingHoursFormValues,
 } from '../../lib/adminValidation'
@@ -48,7 +48,6 @@ function DayRow({ wh }: { wh: WorkingHours }) {
         break_starts_at: !v.is_closed && v.has_break ? v.break_starts_at : null,
         break_ends_at: !v.is_closed && v.has_break ? v.break_ends_at : null,
       })
-      await setHourlyAppointments()
       reset({ ...v, has_break: Boolean(result.break_starts_at) })
       setSaved(true)
     } catch (e) {

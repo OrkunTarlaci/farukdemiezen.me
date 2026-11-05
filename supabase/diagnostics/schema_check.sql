@@ -43,7 +43,11 @@ with checks(migration, kontrol, ok, ayrinti) as (
   -- 0007
   ('0007', 'maintenance_runs tablosu',       to_regclass('public.maintenance_runs') is not null, null),
   ('0007', 'run_daily_cleanup fonksiyonu',   to_regprocedure('public.run_daily_cleanup(timestamptz,text)') is not null, null),
-  ('0007', 'pg_cron eklentisi etkin',        exists (select 1 from pg_extension where extname = 'pg_cron'), null)
+  ('0007', 'pg_cron eklentisi etkin',        exists (select 1 from pg_extension where extname = 'pg_cron'), null),
+  -- 0015
+  ('0015', 'randevu aralığı 60 kısıtı',      exists (select 1 from pg_constraint where conname = 'business_settings_hourly_interval'), null),
+  ('0015', 'tam saat açılış kısıtı',         exists (select 1 from pg_constraint where conname = 'working_hours_opens_on_the_hour'), null),
+  ('0015', 'Pazar kapalı',                   coalesce((select is_closed from public.working_hours where weekday = 7), false), null)
 ),
 security(migration, kontrol, ok, ayrinti) as (
   -- Güvenlik: tarayıcı rolleri rezervasyonu doğrudan yapamamalı, müşteri verisini okuyamamalı.

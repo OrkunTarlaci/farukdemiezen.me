@@ -81,13 +81,14 @@ update public.services set duration_minutes = 40 where name = 'Saç + Sakal';
 update public.services set is_active = false where name = 'Sakal Kesimi';
 
 -- Çalışma saatleri (weekday: 1=Pazartesi … 7=Pazar), mola dahil
-update public.working_hours set opens_at = '09:00', closes_at = '20:00',
+-- Açılış tam saat olmalı (0015); closes_at son randevunun bitiş sınırıdır.
+update public.working_hours set opens_at = '11:00', closes_at = '20:00',
   break_starts_at = '13:00', break_ends_at = '14:00' where weekday between 1 and 5;
 update public.working_hours set is_closed = true where weekday = 7;
 
--- Randevu aralığı, minimum bildirim süresi, kaç gün ilerisine randevu alınabileceği
+-- Minimum bildirim süresi, kaç gün ilerisine randevu alınabileceği (randevu aralığı 0015 ile 60 dakikaya sabittir)
 update public.business_settings
-   set booking_interval_minutes = 30, minimum_booking_notice_minutes = 60, maximum_booking_horizon_days = 30;
+   set minimum_booking_notice_minutes = 60, maximum_booking_horizon_days = 30;
 
 -- Adres ve telefon (doldurulana kadar site bu bölümleri göstermez)
 update public.business_settings

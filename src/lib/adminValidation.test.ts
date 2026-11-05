@@ -72,7 +72,7 @@ describe('kapalı dönem formu (Istanbul saati)', () => {
 describe('ayarlar formu', () => {
   const ok = {
     business_name: 'Faruk Demirezen',
-    booking_interval_minutes: '30', minimum_booking_notice_minutes: '60', maximum_booking_horizon_days: '30',
+    minimum_booking_notice_minutes: '60', maximum_booking_horizon_days: '30',
     max_active_bookings_per_phone: '3', address: '', contact_phone: '', map_url: '',
   }
   it('geçerli ayarları kabul eder', () => {
@@ -82,7 +82,6 @@ describe('ayarlar formu', () => {
   it('güvensiz bağlantıyı ve sınır dışı değerleri reddeder', () => {
     expect(settingsSchema.safeParse({ ...ok, map_url: 'javascript:alert(1)' }).success).toBe(false)
     expect(settingsSchema.safeParse({ ...ok, map_url: 'http://x.com' }).success).toBe(false)
-    expect(settingsSchema.safeParse({ ...ok, booking_interval_minutes: '0' }).success).toBe(false)
     expect(settingsSchema.safeParse({ ...ok, maximum_booking_horizon_days: '366' }).success).toBe(false)
     expect(settingsSchema.safeParse({ ...ok, max_active_bookings_per_phone: '0' }).success).toBe(false)
     expect(settingsSchema.safeParse({ ...ok, business_name: '  ' }).success).toBe(false)

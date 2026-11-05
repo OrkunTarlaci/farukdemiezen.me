@@ -388,11 +388,6 @@ export async function updateWorkingHours(weekday: number, input: Omit<WorkingHou
   return unwrapWrite(res) as WorkingHours
 }
 
-/** Randevular saat başı verilir (11:00, 12:00). Çalışma saati kaydedilirken uygulanır. */
-export async function setHourlyAppointments(): Promise<void> {
-  unwrapWrite(await (await client()).from('business_settings').update({ booking_interval_minutes: 60 }).eq('id', 1).select('id').single())
-}
-
 export async function fetchAdminSettings(): Promise<AdminSettings> {
   const res = await (await client())
     .from('business_settings')
@@ -404,7 +399,7 @@ export async function fetchAdminSettings(): Promise<AdminSettings> {
 
 export type SettingsInput = Pick<
   AdminSettings,
-  'business_name' | 'booking_interval_minutes' | 'minimum_booking_notice_minutes' | 'maximum_booking_horizon_days' |
+  'business_name' | 'minimum_booking_notice_minutes' | 'maximum_booking_horizon_days' |
   'max_active_bookings_per_phone' | 'address' | 'contact_phone' | 'map_url'
 >
 

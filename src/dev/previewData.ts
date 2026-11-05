@@ -7,7 +7,7 @@ export const previewSettings: BusinessSettings = {
   business_name: 'Faruk Demirezen',
   timezone: 'Europe/Istanbul',
   currency: 'TRY',
-  booking_interval_minutes: 30,
+  booking_interval_minutes: 60,
   minimum_booking_notice_minutes: 60,
   maximum_booking_horizon_days: 30,
   address: null,

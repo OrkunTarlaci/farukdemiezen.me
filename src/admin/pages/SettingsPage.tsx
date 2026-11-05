@@ -16,7 +16,6 @@ import { PushCard } from '../PushCard'
 
 const toForm = (s: AdminSettings): SettingsFormValues => ({
   business_name: s.business_name,
-  booking_interval_minutes: String(s.booking_interval_minutes),
   minimum_booking_notice_minutes: String(s.minimum_booking_notice_minutes),
   maximum_booking_horizon_days: String(s.maximum_booking_horizon_days),
   max_active_bookings_per_phone: String(s.max_active_bookings_per_phone),
@@ -39,7 +38,6 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
     try {
       const result = await updateSettings({
         business_name: v.business_name,
-        booking_interval_minutes: v.booking_interval_minutes,
         minimum_booking_notice_minutes: v.minimum_booking_notice_minutes,
         maximum_booking_horizon_days: v.maximum_booking_horizon_days,
         max_active_bookings_per_phone: v.max_active_bookings_per_phone,
@@ -60,11 +58,8 @@ function SettingsForm({ initial }: { initial: AdminSettings }) {
     <form onSubmit={submit} noValidate className="space-y-6">
       <section className="card p-5" aria-labelledby="kurallar">
         <h2 id="kurallar" className="text-base">Randevu kuralları</h2>
-        <p className="mt-1 text-sm text-muted">Müsait saatler ve yeni rezervasyonlar sunucuda bu kurallarla denetlenir.</p>
+        <p className="mt-1 text-sm text-muted">Randevular saat başı verilir. Müsait saatler ve yeni rezervasyonlar sunucuda bu kurallarla denetlenir.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Field id="st-int" label="Randevu aralığı (dk)" hint="Başlangıç saatleri bu aralıkla listelenir (5–120)." error={errors.booking_interval_minutes?.message}>
-            {(p) => <input {...p} {...register('booking_interval_minutes')} {...num} />}
-          </Field>
           <Field id="st-notice" label="En az ne kadar önce (dk)" hint="Bu süreden yakın saatler alınamaz (0–10080)." error={errors.minimum_booking_notice_minutes?.message}>
             {(p) => <input {...p} {...register('minimum_booking_notice_minutes')} {...num} />}
           </Field>
