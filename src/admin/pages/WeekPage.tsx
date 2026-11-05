@@ -53,7 +53,7 @@ export function WeekPage() {
   return (
     <div>
       <PageHeader
-        title="Takvim"
+        title="Haftalık Takvim"
         description={current ? `${formatDateShort(weekStart)} – ${formatDateShort(weekEnd)} · ${activeTotal} aktif randevu` : 'Haftalık görünüm'}
         actions={
           <>

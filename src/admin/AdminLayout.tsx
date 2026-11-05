@@ -1,24 +1,25 @@
-import { CalendarDays, CalendarRange, CalendarX, ChevronRight, Clock, ExternalLink, LayoutDashboard, LogOut, Menu, Scissors, Search, Settings } from 'lucide-react'
+import { CalendarDays, CalendarRange, CalendarX, ChevronRight, Clock, ExternalLink, House, LogOut, Menu, Scissors, Search, Settings } from 'lucide-react'
 import { Suspense, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Dialog } from '../components/ui/Dialog'
 import { Spinner } from '../components/ui/feedback'
 import { Monogram } from '../components/ui/Logo'
+import { formatPrice } from '../lib/time'
 import { usePendingCount } from './usePendingCount'
 
-// `short` olanlar telefonda alt çubukta, diğerleri "Daha" sayfasındadır.
+// `short` olanlar telefonda alt çubukta, diğerleri "Menü" sayfasındadır (`hint` orada görünür).
 const NAV = [
-  { to: '/admin', label: 'Genel Bakış', short: 'Özet', icon: LayoutDashboard, end: true },
-  { to: '/admin/gun', label: 'Günlük Randevular', short: 'Randevular', icon: CalendarDays },
-  { to: '/admin/takvim', label: 'Takvim', short: 'Takvim', icon: CalendarRange },
-  { to: '/admin/ara', label: 'Ara ve Filtrele', short: 'Ara', icon: Search },
-  { to: '/admin/toplu-iptal', label: 'Toplu İptal', icon: CalendarX },
-  { to: '/admin/hizmetler', label: 'Hizmetler', icon: Scissors },
-  { to: '/admin/saatler', label: 'Çalışma Saatleri', icon: Clock },
-  { to: '/admin/ayarlar', label: 'Ayarlar', icon: Settings },
+  { to: '/admin', label: 'Ana Sayfa', short: 'Ana Sayfa', icon: House, end: true },
+  { to: '/admin/gun', label: 'Randevular', short: 'Randevular', icon: CalendarDays },
+  { to: '/admin/ara', label: 'Müşteri Ara', short: 'Ara', icon: Search },
+  { to: '/admin/takvim', label: 'Haftalık Takvim', hint: 'Haftanın bütün randevuları', icon: CalendarRange },
+  { to: '/admin/toplu-iptal', label: 'Toplu İptal', hint: 'Birden çok randevuyu birlikte iptal et', icon: CalendarX },
+  { to: '/admin/hizmetler', label: 'Hizmet ve Fiyatlar', hint: 'Hizmet ekle, fiyat değiştir', icon: Scissors },
+  { to: '/admin/saatler', label: 'Çalışma Saatleri', hint: 'Açılış, kapanış, tatil günleri', icon: Clock },
+  { to: '/admin/ayarlar', label: 'Ayarlar', hint: 'Telefon, adres, randevu kuralları', icon: Settings },
 ] as const
 
-const MORE = NAV.filter((n) => !('short' in n))
+const MORE = NAV.flatMap((n) => ('hint' in n ? [n] : []))
 
 function PendingBadge({ count }: { count: number }) {
   if (count === 0) return null
@@ -30,7 +31,7 @@ function PendingBadge({ count }: { count: number }) {
 }
 
 const tabClass = (active: boolean) =>
-  `relative flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 text-[0.6875rem] font-medium ${active ? 'text-accent' : 'text-muted'}`
+  `relative flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-1 text-xs font-medium ${active ? 'text-accent' : 'text-muted'}`
 
 /** Telefon ve tablet: başparmağın ulaştığı alt çubuk. */
 function BottomBar({ pending, onMore }: { pending: number; onMore: () => void }) {
@@ -50,7 +51,7 @@ function BottomBar({ pending, onMore }: { pending: number; onMore: () => void })
         ))}
         <button type="button" onClick={onMore} className={tabClass(inMore)}>
           <Menu className="h-5 w-5" aria-hidden />
-          Daha
+          Menü
         </button>
       </div>
     </nav>
@@ -60,13 +61,16 @@ function BottomBar({ pending, onMore }: { pending: number; onMore: () => void })
 function MoreSheet({ open, onClose, email, onSignOut }: { open: boolean; onClose: () => void; email: string; onSignOut: () => void }) {
   const row = 'flex min-h-[3.25rem] w-full items-center gap-3 px-1 text-base text-fg'
   return (
-    <Dialog open={open} onClose={onClose} title="Daha fazla" sheet>
+    <Dialog open={open} onClose={onClose} title="Menü" sheet>
       <ul className="divide-y divide-line">
-        {MORE.map(({ to, label, icon: Icon }) => (
+        {MORE.map(({ to, label, hint, icon: Icon }) => (
           <li key={to}>
             <Link to={to} onClick={onClose} className={row}>
               <Icon className="h-5 w-5 text-muted" aria-hidden />
-              <span className="flex-1">{label}</span>
+              <span className="min-w-0 flex-1 py-2">
+                <span className="block">{label}</span>
+                <span className="block text-xs text-muted">{hint}</span>
+              </span>
               <ChevronRight className="h-4 w-4 text-subtle" aria-hidden />
             </Link>
           </li>
@@ -158,12 +162,26 @@ export function PageHeader({ title, description, actions }: { title: string; des
 type Tone = 'success' | 'warning' | 'danger' | 'accent'
 const TONES: Record<Tone, string> = { success: 'text-success', warning: 'text-warning', danger: 'text-danger', accent: 'text-accent' }
 
+/** Para: "Kazanılan" yalnızca Tamamlandı işaretlenenleri sayar; "Herkes gelirse" günün tüm randevularını. */
+export function MoneyStat({ earnedMinor, allMinor, unknownPrice }: { earnedMinor: number; allMinor: number; unknownPrice: number }) {
+  return (
+    <div className="col-span-2 sm:col-span-1">
+      <StatCard
+        label="Kazanılan para"
+        value={formatPrice(earnedMinor) ?? '—'}
+        tone="accent"
+        hint={unknownPrice ? `${unknownPrice} randevunun fiyatı kayıtlı değil` : `Herkes gelirse: ${formatPrice(allMinor)}`}
+      />
+    </div>
+  )
+}
+
 export function StatCard({ label, value, tone, hint }: { label: string; value: number | string; tone?: Tone; hint?: string }) {
   return (
     <div className="card p-4">
       <p className={`text-2xl font-semibold tabular-nums ${tone ? TONES[tone] : 'text-fg'}`}>{value}</p>
-      <p className="mt-1 text-xs text-muted">{label}</p>
-      {hint && <p className="mt-1 text-[0.7rem] text-subtle">{hint}</p>}
+      <p className="mt-1 text-sm text-muted">{label}</p>
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   )
 }

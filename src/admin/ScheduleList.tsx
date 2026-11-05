@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import type { AppointmentIssue, ScheduleRow } from '../lib/schedule'
-import { ISSUE_LABELS, mergeAvailableRows } from '../lib/schedule'
+import { ISSUE_LABELS } from '../lib/schedule'
 import { timeOfInstant } from '../lib/time'
 import type { AppointmentRow } from '../lib/types'
 import { STATUS_LABELS, STATUS_TEXT, StatusBadge, TestBadge } from './StatusBadge'
@@ -19,13 +19,13 @@ function minutes(a: AppointmentRow) {
 export function ScheduleList({ rows, issuesById, onOpen }: Props) {
   return (
     <ul className="space-y-2">
-      {mergeAvailableRows(rows).map((r) => {
+      {rows.map((r) => {
         const time = timeOfInstant(r.start)
         if (r.kind === 'available' || r.kind === 'break' || r.kind === 'blocked') {
-          const text = r.kind === 'available' ? 'Müsait' : r.kind === 'break' ? 'Mola' : `Kapalı${r.reason ? ` — ${r.reason}` : ''}`
+          const text = r.kind === 'available' ? 'Boş' : r.kind === 'break' ? 'Mola' : `Kapalı${r.reason ? ` — ${r.reason}` : ''}`
           return (
-            <li key={r.key} className="flex min-h-[2.75rem] items-center gap-4 rounded-lg border border-dashed border-line px-4 text-sm text-subtle">
-              <span className="font-mono tabular-nums">{r.kind === 'available' ? `${time} – ${timeOfInstant(r.end)}` : time}</span>
+            <li key={r.key} className="flex min-h-[2.75rem] items-center gap-4 rounded-lg border border-dashed border-line px-4 text-sm text-muted">
+              <span className="w-12 shrink-0 font-mono text-base font-semibold tabular-nums">{time}</span>
               <span className={r.kind === 'available' ? '' : 'rounded-md border border-line px-2 py-0.5 text-xs text-muted'}>{text}</span>
             </li>
           )

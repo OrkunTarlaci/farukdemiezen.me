@@ -4,6 +4,7 @@ import { scrollToId } from '../../lib/nav'
 import type { BusinessSettings, WorkingHours } from '../../lib/types'
 import { Logo } from '../ui/Logo'
 import { PrivacyLink } from './PrivacyNotice'
+import { SocialLinks } from './SocialLinks'
 
 interface Props {
   settings: BusinessSettings | undefined
@@ -34,6 +35,7 @@ export function Footer({ settings, workingHours }: Props) {
             {hours?.map((h) => <li key={h.days}><span className="text-fg/85">{h.days}</span> · {h.hours}</li>)}
             {!settings?.contact_phone && !settings?.address && !hours && <li>Bilgiler yakında eklenecek.</li>}
           </ul>
+          <div className="mt-3"><SocialLinks contactPhone={settings?.contact_phone} /></div>
         </div>
 
         <nav aria-label="Alt menü">

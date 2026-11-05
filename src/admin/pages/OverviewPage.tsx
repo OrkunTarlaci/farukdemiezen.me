@@ -7,13 +7,13 @@ import { fetchAppointmentsInRange, setAppointmentStatus, triggerNotifications } 
 import { toAppError } from '../../lib/errors'
 import { appointmentIssues } from '../../lib/schedule'
 import { summarizeAppointments } from '../../lib/stats'
-import { addDays, dateOfInstant, formatDateLong, formatDateShort, formatPrice, timeOfInstant } from '../../lib/time'
+import { addDays, dateOfInstant, formatDateLong, formatDateShort, timeOfInstant } from '../../lib/time'
 import { useIstanbulToday } from '../../lib/useToday'
 import type { AppointmentRow } from '../../lib/types'
 import { useAsync } from '../../lib/useAsync'
 import { useLiveAppointments } from '../../lib/useLiveAppointments'
 import { AppointmentDialog } from '../AppointmentDialog'
-import { PageHeader, StatCard } from '../AdminLayout'
+import { MoneyStat, PageHeader, StatCard } from '../AdminLayout'
 import { ContactActions } from '../ContactActions'
 import { STATUS_LABELS, STATUS_TEXT, StatusBadge, TestBadge } from '../StatusBadge'
 
@@ -112,7 +112,7 @@ export function OverviewPage() {
   return (
     <div>
       <PageHeader
-        title="Genel Bakış"
+        title="Ana Sayfa"
         description={formatDateLong(today)}
         actions={<Button variant="secondary" size="sm" onClick={data.reload} aria-label="Yenile" icon={<RotateCw className={`h-4 w-4 ${data.loading ? 'animate-spin' : ''}`} aria-hidden />} />}
       />
@@ -125,17 +125,10 @@ export function OverviewPage() {
       {data.data && (
         // Telefonda sıra işe göredir: önce bekleyen talepler, sayılar en altta.
         <div className="flex flex-col lg:block">
-          <div className="order-last mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:order-none lg:mb-6 lg:mt-0 lg:grid-cols-6">
+          <div className="order-last mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:order-none lg:mb-6 lg:mt-0">
             <StatCard label="Bugünkü randevu" value={view.summary.active} />
-            <StatCard label="Onay bekleyen talep" value={view.pending.length} tone="warning" />
-            <StatCard label="Bugün onaylı" value={view.summary.confirmed} tone="success" />
-            <StatCard label="Bugün tamamlanan" value={view.summary.completed} tone="accent" />
-            <StatCard label="Bugün iptal" value={view.summary.cancelled} tone="danger" />
-            <StatCard
-              label="Bugün beklenen ciro"
-              value={formatPrice(view.summary.expectedMinor) ?? '—'}
-              hint={view.summary.unknownPrice ? `${view.summary.unknownPrice} randevunun fiyatı kayıtlı değil` : `Gerçekleşen: ${formatPrice(view.summary.realizedMinor)}`}
-            />
+            <StatCard label="Onay bekleyen" value={view.pending.length} tone="warning" />
+            <MoneyStat earnedMinor={view.summary.realizedMinor} allMinor={view.summary.expectedMinor} unknownPrice={view.summary.unknownPrice} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr]">
@@ -155,7 +148,7 @@ export function OverviewPage() {
               ) : (
                 <p className="mt-3 text-sm text-muted">Önümüzdeki {UPCOMING_DAYS} gün için randevu yok.</p>
               )}
-              <p className="mt-4 border-t border-line pt-3 text-xs text-subtle">Önümüzdeki {UPCOMING_DAYS} günde {view.upcomingCount} aktif randevu.</p>
+              <p className="mt-4 border-t border-line pt-3 text-xs text-muted">Önümüzdeki {UPCOMING_DAYS} günde {view.upcomingCount} randevu var.</p>
             </section>
 
             <section className={`card order-first p-4 sm:p-5 lg:order-none ${view.pending.length === 0 ? 'hidden lg:block' : ''}`} aria-labelledby="bekleyen">
@@ -163,9 +156,6 @@ export function OverviewPage() {
                 <h2 id="bekleyen" className="text-base font-semibold text-fg lg:text-sm lg:font-normal lg:text-muted">
                   Onay bekleyen talepler{view.pending.length > 0 && <span className="text-warning"> ({view.pending.length})</span>}
                 </h2>
-                <Link to="/admin/ara" className="inline-flex min-h-[2.5rem] items-center gap-1 text-xs text-accent hover:underline">
-                  Tüm randevular <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-                </Link>
               </div>
               {view.pending.length === 0 ? (
                 <p className="mt-3 text-sm text-muted">Bekleyen talep yok.</p>
@@ -184,16 +174,16 @@ export function OverviewPage() {
                   ))}
                 </ul>
               )}
-              {view.pending.length > 8 && <p className="mt-2 text-xs text-subtle">+{view.pending.length - 8} talep daha (Ara ve Filtrele sayfasında).</p>}
+              {view.pending.length > 8 && <p className="mt-2 text-xs text-subtle">+{view.pending.length - 8} talep daha (Müşteri Ara sayfasında).</p>}
             </section>
           </div>
 
           {view.unresolved.length > 0 && (
             <section className="card mt-4 border-warning/40 p-5" aria-labelledby="sonuc">
               <h2 id="sonuc" className="flex items-center gap-2 text-sm text-warning">
-                <AlertTriangle className="h-4 w-4" aria-hidden /> Sonucu işaretlenmemiş randevular (bugün)
+                <AlertTriangle className="h-4 w-4" aria-hidden /> Saati geçen randevular
               </h2>
-              <p className="mt-1 text-xs text-muted">Saati geçmiş ama hâlâ “onay bekliyor” veya “onaylandı” durumundakiler. Açıp “Tamamlandı” ya da “Gelmedi” olarak işaretleyin.</p>
+              <p className="mt-1 text-xs text-muted">Müşteriye dokunun: geldiyse “Tamamlandı”, gelmediyse “Gelmedi” seçin.</p>
               <ul className="-mx-3 mt-2">{view.unresolved.map((a) => <Row key={a.id} a={a} showDate onOpen={() => open(a.id)} />)}</ul>
             </section>
           )}
@@ -202,7 +192,7 @@ export function OverviewPage() {
             <div className="mb-2 flex items-center justify-between">
               <h2 id="bugun" className="text-base">Bugünün randevuları</h2>
               <Link to="/admin/gun" className="inline-flex min-h-[2.5rem] items-center gap-1 text-xs text-accent hover:underline">
-                Günlük çizelge <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                Tüm saatler <ArrowRight className="h-3.5 w-3.5" aria-hidden />
               </Link>
             </div>
             {view.todays.length === 0 ? (

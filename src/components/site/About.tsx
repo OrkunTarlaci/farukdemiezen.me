@@ -1,4 +1,5 @@
 import { siteConfig } from '../../config/site'
+import { SocialLinks } from './SocialLinks'
 
 /** Metni henüz yazılmamış alan: yalnızca geliştirme önizlemesinde, nereye ne yazılacağını gösterir. */
 function Placeholder({ label, hint }: { label: string; hint?: string }) {
@@ -12,7 +13,7 @@ function Placeholder({ label, hint }: { label: string; hint?: string }) {
   )
 }
 
-export function About({ businessName }: { businessName?: string }) {
+export function About({ businessName, contactPhone }: { businessName?: string; contactPhone?: string | null }) {
   const { about } = siteConfig
   const name = businessName || siteConfig.name
   const photo = about.photoUrl
@@ -59,6 +60,8 @@ export function About({ businessName }: { businessName?: string }) {
               </div>
             ))}
           </div>
+
+          <div className="mt-8"><SocialLinks contactPhone={contactPhone} /></div>
 
           {about.quote
             ? <blockquote className="mt-10 border-l-2 border-accent pl-4 text-lg italic text-fg sm:text-xl">“{about.quote}”<footer className="mt-2 text-sm not-italic text-muted">{about.quoteBy ?? name}</footer></blockquote>

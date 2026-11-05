@@ -7,6 +7,13 @@ export const siteConfig = {
   // Onaylı logo dosyası eklendiğinde (örn. 'images/logo.svg') buraya yazın; null ise "FD" monogramı çizilir.
   logoUrl: null as string | null,
 
+  // Sosyal medya. Tam bağlantıyı tırnak içine yazın, örn. 'https://www.instagram.com/kullaniciadi/'.
+  // null ise görünmez. whatsappUrl boşsa panelde Ayarlar > Telefon alanındaki cep numarası kullanılır.
+  social: {
+    instagramUrl: null as string | null,
+    whatsappUrl: null as string | null,
+  },
+
   hero: {
     headline: 'Temiz kesim. Düzenli sakal.',
     support: 'Saatinizi online ayırtın, sıra beklemeden gelin.',

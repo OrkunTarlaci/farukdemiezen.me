@@ -64,7 +64,7 @@ export function HomePage() {
           </div>
         </section>
 
-        <About businessName={businessName} />
+        <About businessName={businessName} contactPhone={data?.settings.contact_phone} />
         {data && <Location settings={data.settings} />}
       </main>
       <Footer settings={data?.settings} workingHours={data?.workingHours} />

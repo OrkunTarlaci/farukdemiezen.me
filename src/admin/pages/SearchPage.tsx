@@ -46,7 +46,7 @@ export function SearchPage() {
 
   return (
     <div>
-      <PageHeader title="Ara ve Filtrele" description={<span className="hidden sm:inline">Bugünkü ve yaklaşan randevuları tarih, durum ve hizmete göre bulun. Önceki günlerin randevuları her gece 00:00'da silindiği için geçmiş kayıt bulunmaz.</span>} />
+      <PageHeader title="Müşteri Ara" description={<span className="hidden sm:inline">Bugünkü ve yaklaşan randevuları tarih, durum ve hizmete göre bulun. Önceki günlerin randevuları her gece 00:00'da silindiği için geçmiş kayıt bulunmaz.</span>} />
 
       <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Hazır aralıklar">
         {PRESETS.map((p) => {
@@ -76,7 +76,7 @@ export function SearchPage() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ad, telefon veya referans"
+              placeholder="Ad veya telefon yazın"
               className={`${inputClass} pl-9`}
             />
           </span>

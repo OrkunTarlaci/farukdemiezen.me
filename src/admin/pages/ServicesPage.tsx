@@ -154,7 +154,7 @@ export function ServicesPage() {
   return (
     <div>
       <PageHeader
-        title="Hizmetler"
+        title="Hizmet ve Fiyatlar"
         description="Burada yaptığınız değişiklikler müşteri sitesine ve yeni randevulara hemen yansır. Mevcut randevular değişmez."
         actions={<Button onClick={() => { setNotice(null); setEditing('new') }} icon={<Plus className="h-4 w-4" aria-hidden />}>Hizmet ekle</Button>}
       />

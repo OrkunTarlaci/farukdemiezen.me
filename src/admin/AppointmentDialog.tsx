@@ -60,7 +60,7 @@ function Reschedule({ appointment, onDone, onCancel }: { appointment: Appointmen
 
   return (
     <div className="mt-5 rounded-lg border border-line p-4">
-      <p className="text-sm font-medium">Yeniden planla</p>
+      <p className="text-sm font-medium">Saati Değiştir</p>
       <p className="mt-1 text-xs text-muted">Yalnızca çalışma saatlerine, kapalı dönemlere ve diğer randevulara uygun saatler listelenir. Süre aynı kalır.</p>
       <label className="mt-3 block text-sm">
         <span className="mb-1.5 block text-muted">Yeni tarih</span>
@@ -298,12 +298,12 @@ export function AppointmentDialog({ appointment: a, issues = [], startCancel = f
               )}
               {open && !started && (
                 <Button variant="secondary" disabled={disabled} onClick={() => setRescheduling(true)} icon={<CalendarClock className="h-4 w-4" aria-hidden />}>
-                  Yeniden planla
+                  Saati Değiştir
                 </Button>
               )}
               {open && (
                 <Button variant="ghost" disabled={disabled} onClick={() => setConfirmingCancel(true)}>
-                  {a.status === 'pending' ? 'Reddet / İptal Et' : 'İptal Et'}
+                  {a.status === 'pending' ? 'Reddet' : 'İptal Et'}
                 </Button>
               )}
               {a.status === 'completed' && (

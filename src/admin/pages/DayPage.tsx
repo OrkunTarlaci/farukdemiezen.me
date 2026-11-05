@@ -10,7 +10,7 @@ import { useIstanbulToday } from '../../lib/useToday'
 import { summarizeAppointments } from '../../lib/stats'
 import { useAsync } from '../../lib/useAsync'
 import { AppointmentDialog } from '../AppointmentDialog'
-import { PageHeader, StatCard } from '../AdminLayout'
+import { MoneyStat, PageHeader, StatCard } from '../AdminLayout'
 import { ScheduleList } from '../ScheduleList'
 
 /** Telefon: iki haftalık gün şeridi; başparmakla kaydırılır, takvim düğmesi başka bir gün seçtirir. */
@@ -108,11 +108,8 @@ export function DayPage() {
   return (
     <div>
       <PageHeader
-        title="Günlük Randevular"
-        description={<>
-          <span className="sm:hidden">{formatDateLong(date)}</span>
-          <span className="hidden sm:inline">İşletme günü (İstanbul): <strong className="text-fg">{formatDateLong(today)}</strong>. Önceki günlerin randevuları her gece 00:00'da silinir.</span>
-        </>}
+        title="Randevular"
+        description={formatDateLong(date)}
         actions={<span className="lg:hidden"><Button variant="secondary" size="md" onClick={day.reload} aria-label="Listeyi yenile" icon={<RotateCw className={`h-4 w-4 ${day.loading ? 'animate-spin' : ''}`} aria-hidden />} /></span>}
       />
 
@@ -140,32 +137,23 @@ export function DayPage() {
 
       {current && (
         <p className="mb-4 text-sm text-muted sm:hidden">
-          <span className="font-semibold text-fg">{counts.active} aktif</span>
+          <span className="font-semibold text-fg">{counts.active} randevu</span>
           {counts.pending > 0 && <span className="text-warning"> · {counts.pending} onay bekliyor</span>}
-          {counts.completed > 0 && <> · {counts.completed} tamamlandı</>}
-          {counts.cancelled + counts.noShow > 0 && <> · {counts.cancelled} iptal / {counts.noShow} gelmedi</>}
-          {formatPrice(counts.expectedMinor) && <> · {formatPrice(counts.expectedMinor)}</>}
+          <span className="block">Kazanılan {formatPrice(counts.realizedMinor)} · Herkes gelirse {formatPrice(counts.expectedMinor)}</span>
         </p>
       )}
       {current && (
-        <div className="mb-5 hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-3 lg:grid-cols-6">
-          <StatCard label="Aktif randevu" value={counts.active} />
+        <div className="mb-5 hidden gap-3 sm:grid sm:grid-cols-3">
+          <StatCard label="Randevu" value={counts.active} />
           <StatCard label="Onay bekliyor" value={counts.pending} tone="warning" />
-          <StatCard label="Onaylandı" value={counts.confirmed} tone="success" />
-          <StatCard label="Tamamlandı" value={counts.completed} tone="accent" />
-          <StatCard label="İptal / gelmedi" value={`${counts.cancelled} / ${counts.noShow}`} tone="danger" />
-          <StatCard
-            label="Beklenen ciro"
-            value={formatPrice(counts.expectedMinor) ?? '—'}
-            hint={counts.unknownPrice ? `${counts.unknownPrice} randevunun fiyatı kayıtlı değil` : `Gerçekleşen: ${formatPrice(counts.realizedMinor)}`}
-          />
+          <MoneyStat earnedMinor={counts.realizedMinor} allMinor={counts.expectedMinor} unknownPrice={counts.unknownPrice} />
         </div>
       )}
 
       {attention > 0 && (
         <p role="note" className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/[0.08] p-3 text-sm">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
-          <span>{attention} randevu dikkat gerektiriyor<span className="hidden sm:inline"> (güncel çalışma saatleriyle çakışıyor, onay bekliyor ya da sonucu işaretlenmedi). Aşağıda işaretlidir</span>.</span>
+          <span>{attention} randevuya bakmanız gerekiyor. Aşağıda işaretli.</span>
         </p>
       )}
 
