@@ -15,7 +15,7 @@ permissions:
 
 # Aynı anda tek yayın; çalışmakta olan bir yayın yarıda kesilmez (GitHub'ın önerdiği ayar).
 concurrency:
-  group: pages
+  group: pages-deploy
   cancel-in-progress: false
 
 jobs:
