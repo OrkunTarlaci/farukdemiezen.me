@@ -20,10 +20,10 @@ function DayStrip({ today, date, onPick }: { today: string; date: string; onPick
   const days = Array.from({ length: 14 }, (_, i) => addDays(today, i))
   return (
     <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:hidden" role="group" aria-label="Gün seçimi">
-      <label className="relative flex h-[3.75rem] w-12 shrink-0 items-center justify-center rounded-lg border border-line text-accent">
+      <label className="relative flex h-[3.75rem] w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line text-accent">
         <CalendarDays className="h-5 w-5" aria-hidden />
         <span className="sr-only">Başka bir tarih seç</span>
-        <input type="date" value={date} onChange={(e) => onPick(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+        <input type="date" value={date} onChange={(e) => onPick(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
       </label>
       {days.map((d) => {
         const active = d === date
@@ -117,7 +117,7 @@ export function DayPage() {
 
       <div className="card mb-5 hidden flex-wrap items-center gap-2 p-2 lg:flex" role="group" aria-label="Gün seçimi">
         <Button variant="ghost" onClick={() => setValidDate(addDays(date, -1))} aria-label="Önceki gün" icon={<ChevronLeft className="h-4 w-4" aria-hidden />} />
-        <label className="relative inline-flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 rounded-lg px-2 text-sm font-medium sm:flex-none">
+        <label className="relative inline-flex min-h-[2.75rem] flex-1 items-center justify-center gap-2 overflow-hidden rounded-lg px-2 text-sm font-medium sm:flex-none">
           <CalendarDays className="h-4 w-4 text-accent" aria-hidden />
           <span className="sr-only">Tarih seç</span>
           <span aria-live="polite">{formatDateLong(date)}</span>
@@ -125,7 +125,7 @@ export function DayPage() {
             type="date"
             value={date}
             onChange={(e) => setValidDate(e.target.value)}
-            className="absolute inset-0 cursor-pointer opacity-0"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
         </label>
         <Button variant="ghost" onClick={() => setValidDate(addDays(date, 1))} aria-label="Sonraki gün" icon={<ChevronRight className="h-4 w-4" aria-hidden />} />
