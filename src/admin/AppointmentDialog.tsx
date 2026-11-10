@@ -69,8 +69,8 @@ function Reschedule({ appointment, onDone, onCancel }: { appointment: Appointmen
       <div className="mt-3" aria-live="polite">
         {slots.loading && <Spinner label="Uygun saatler yükleniyor…" />}
         {slots.error && <ErrorPanel message={slots.error.message} onRetry={slots.reload} />}
-        {slots.data && slots.data.length === 0 && <p className="text-sm text-muted">Bu gün için uygun saat yok.</p>}
-        {slots.data && slots.data.length > 0 && (
+        {slots.data && !slots.loading && slots.data.length === 0 && <p className="text-sm text-muted">Bu gün için uygun saat yok.</p>}
+        {slots.data && !slots.loading && slots.data.length > 0 && (
           <ul className="grid grid-cols-4 gap-2 sm:grid-cols-5" aria-label="Uygun saatler">
             {slots.data.map((iso) => (
               <li key={iso}>

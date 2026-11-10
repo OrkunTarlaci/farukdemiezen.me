@@ -32,7 +32,7 @@ export function Services({ services, settings, loading, error, onRetry, onBook }
             {services.map((s) => {
               const price = formatPrice(s.price_minor, settings?.currency ?? 'TRY')
               return (
-                <li key={s.id} className="card flex flex-col p-5 transition-colors hover:border-fg/20">
+                <li key={s.id} className="card relative flex flex-col p-5 transition-colors hover:border-accent/50">
                   <div className="flex items-start justify-between gap-4">
                     <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-raised text-accent" aria-hidden>
                       <Scissors className="h-5 w-5" />
@@ -52,7 +52,8 @@ export function Services({ services, settings, loading, error, onRetry, onBook }
                       type="button"
                       onClick={() => onBook(s.id)}
                       aria-label={`${s.name} için randevu al`}
-                      className="inline-flex min-h-[2.75rem] items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-accent hover:bg-raised"
+                      // Kartın tamamı dokunulabilir: görünmez katman düğmeyi karta yayar.
+                      className="inline-flex min-h-[2.75rem] items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-accent after:absolute after:inset-0 after:rounded-xl"
                     >
                       Randevu Al <ArrowRight className="h-4 w-4" aria-hidden />
                     </button>

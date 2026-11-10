@@ -64,7 +64,8 @@ export function BulkCancelPage() {
   const selected = candidates.filter((a) => !excluded.has(a.id))
   const cleanReason = normalizeReason(reason)
   const message = buildCancelMessage(reason, date, today)
-  const canSubmit = selected.length > 0 && cleanReason !== null && !running && !day.loading
+  // Arka plan yenilemesi (30 sn) düğmeyi kilitlemez; gün değişince liste zaten boşalır.
+  const canSubmit = selected.length > 0 && cleanReason !== null && !running
 
   function toggle(id: string) {
     setExcluded((prev) => {
