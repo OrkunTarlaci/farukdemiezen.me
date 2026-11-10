@@ -139,8 +139,10 @@ export function BookingFlow({ site, preselect }: Props) {
   const available = useMemo(() => new Set(dates.data ?? []), [dates.data])
 
   const chooseService = (id: string) => { setServiceId(id); setDate(undefined); setSlot(undefined) }
-  const chooseDate = (d: string) => { setDate(d); setSlot(undefined) }
+  // Seçim yapılınca bir sonraki adıma geçilir; "Devam Et" yine çalışır.
+  const chooseDate = (d: string) => { setDate(d); setSlot(undefined); setStep(3) }
   const onSlot = useCallback((s: string | undefined) => setSlot(s), [])
+  const pickSlot = useCallback((s: string) => { setSlot(s); setStep(4) }, [])
 
   const reset = () => {
     setStep(1); setServiceId(undefined); setDate(undefined); setSlot(undefined); setCustomer(EMPTY); setResult(undefined)
@@ -175,6 +177,8 @@ export function BookingFlow({ site, preselect }: Props) {
                   return (
                     <label
                       key={s.id}
+                      // Dokunma ve tıklamada ilerler; ok tuşlarıyla gezinirken (detail 0) adım değişmez.
+                      onClick={(e) => { if (e.detail > 0 && !(e.target instanceof HTMLInputElement)) { chooseService(s.id); setStep(2) } }}
                       className={[
                         'flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors sm:p-4',
                         'has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent',
@@ -218,7 +222,7 @@ export function BookingFlow({ site, preselect }: Props) {
           {step === 3 && serviceId && date && (
             <div>
               <h3 className="mb-1 text-lg">Saat seçin</h3>
-              <TimeStep date={date} serviceId={serviceId} value={slot} onSelect={onSlot} />
+              <TimeStep date={date} serviceId={serviceId} value={slot} onSelect={onSlot} onPick={pickSlot} />
             </div>
           )}
 

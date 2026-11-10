@@ -9,11 +9,13 @@ interface Props {
   serviceId: string
   value: string | undefined
   onSelect: (slotIso: string | undefined) => void
+  /** Kullanıcı bir saate dokundu: seçilir ve sonraki adıma geçilir. */
+  onPick: (slotIso: string) => void
 }
 
 const REFRESH_MS = 20_000
 
-export function TimeStep({ date, serviceId, value, onSelect }: Props) {
+export function TimeStep({ date, serviceId, value, onSelect, onPick }: Props) {
   const { data, error, loading, reload, refresh } = useAsync(() => fetchAvailableSlots(date, serviceId), [date, serviceId])
 
   // Sayfa açık kalsa da alınan saat listeden düşer (başka cihazda alınan randevu dahil).
@@ -51,7 +53,7 @@ export function TimeStep({ date, serviceId, value, onSelect }: Props) {
                 <button
                   type="button"
                   aria-pressed={selected}
-                  onClick={() => onSelect(iso)}
+                  onClick={() => onPick(iso)}
                   className={[
                     'flex min-h-[2.75rem] w-full items-center justify-center rounded-lg border text-sm tabular-nums transition-colors',
                     selected

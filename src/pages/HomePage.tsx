@@ -6,6 +6,7 @@ import { Footer } from '../components/site/Footer'
 import { Header } from '../components/site/Header'
 import { Hero } from '../components/site/Hero'
 import { Location } from '../components/site/Location'
+import { MobileBookBar } from '../components/site/MobileBookBar'
 import { Services } from '../components/site/Services'
 import { ErrorPanel, Notice, Spinner } from '../components/ui/feedback'
 import { scrollToId } from '../lib/nav'
@@ -68,6 +69,7 @@ export function HomePage() {
         {data && <Location settings={data.settings} />}
       </main>
       <Footer settings={data?.settings} workingHours={data?.workingHours} />
+      <MobileBookBar />
     </>
   )
 }

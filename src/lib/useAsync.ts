@@ -35,7 +35,10 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[], enabled = tru
 
   const refresh = useCallback(() => {
     const id = ++run.current
-    fnRef.current().then((d) => { if (id === run.current) { setData(d); setLoading(false) } }, () => { if (id === run.current) setLoading(false) })
+    fnRef.current().then(
+      (d) => { if (id === run.current) { setData(d); setError(null); setLoading(false) } },
+      () => { if (id === run.current) setLoading(false) },
+    )
   }, [])
 
   useEffect(() => {
